@@ -35,9 +35,9 @@ def cd_color_segmentation(img, template, blackout_regions=False):
     # Convert BGR image to HSV
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
-    # Define lower and upper bounds for the cone color in HSV
-    lower_bound = np.array([5, 50, 50])  # Lower bound for orange in HSV [0,55,106] to [11,255,255]
-    upper_bound = np.array([15, 255, 255])  # Upper bound for orange in HSV
+    # Define lower and upper bounds for the line color in HSV
+    lower_bound = np.array([0, 0, 200])  # Lower bound for orange in HSV [0,55,106] to [11,255,255]
+    upper_bound = np.array([179, 30, 255])  # Upper bound for orange in HSV
     
     # Create a mask using the defined bounds
     mask = cv2.inRange(hsv_img, lower_bound, upper_bound)

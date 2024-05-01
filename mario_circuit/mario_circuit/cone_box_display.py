@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#from Lab4, requires edits
+#from Lab4, no edits needed
 
 import rclpy
 from rclpy.node import Node
