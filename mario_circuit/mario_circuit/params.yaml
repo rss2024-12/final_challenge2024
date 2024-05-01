@@ -1,0 +1,4 @@
+driving_controller:
+  ros__parameters:
+    drive_speed: 1.0
+    drive_topic: "/vesc/low_level/input/navigation" 

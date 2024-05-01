@@ -1,0 +1,27 @@
+<launch>
+
+  <!-- Taken from Lab 4 launch file: parking_deploy.launch.xml-->
+  
+ 
+  <node pkg="mario_circuit" name="parking_controller" exec="parking_controller" output="screen">
+  	<param from="$(find-pkg-share mario_circuit)/mario_circuit/params.yaml"/>
+  </node>
+
+ 
+  <node pkg="mario_circuit" name="homography_transformer" exec="homography_transformer" output="screen">
+  </node>
+
+
+  <node pkg="mario_circuit" name="mask_display" exec="mask_display" output="screen">
+  </node>
+
+  <node pkg="mario_circuit" name="cone_detector" exec="cone_detector" output="screen">
+  </node>
+
+ 
+
+  <node pkg="mario_circuit" name="cone_box_display" exec="cone_box_display" output="screen">
+  </node>
+
+
+</launch>
