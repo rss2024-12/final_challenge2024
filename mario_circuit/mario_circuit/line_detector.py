@@ -10,7 +10,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point #geometry_msgs not in CMake file
-from vs_msgs.msg import ConeLocationPixel
+from vs_msgs.msg import LineLocationPixel
 
 
 
@@ -27,7 +27,7 @@ class LineDetector(Node):
        
 
         # Subscribe to ZED camera RGB frames
-        self.line_pub = self.create_publisher(ConeLocationPixel, "/relative_line_px", 10)
+        self.line_pub = self.create_publisher(LineLocationPixel, "/relative_line_px", 10)
         self.debug_pub = self.create_publisher(Image, "/line_debug_img", 10)
         self.image_sub = self.create_subscription(Image, "/zed/zed_node/rgb/image_rect_color", self.image_callback, 5)
         self.bridge = CvBridge() # Converts between ROS images and OpenCV Images
@@ -46,8 +46,8 @@ class LineDetector(Node):
         hsv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
     
         # Define lower and upper bounds for the line color in HSV
-        lower_bound = np.array([0, 0, 200])  # Lower bound for orange in HSV [0,55,106] to [11,255,255]
-        upper_bound = np.array([179, 30, 255])  # Upper bound for orange in HSV
+        lower_bound = np.array([0, 0, 200])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
+        upper_bound = np.array([179, 30, 255])  # Upper bound for white in HSV
        
         # Threshold the HSV image to get a binary mask
         mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
@@ -88,7 +88,7 @@ class LineDetector(Node):
 
    
 
-        pixel = ConeLocationPixel()
+        pixel = LineLocationPixel()
         pixel.u = float(mid_x)
         pixel.v = float(mid_y)
         self.line_pub.publish(pixel)

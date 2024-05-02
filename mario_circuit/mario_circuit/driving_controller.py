@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 
-from vs_msgs.msg import ConeLocation, ParkingError
+from vs_msgs.msg import LineLocation, ParkingError
 from ackermann_msgs.msg import AckermannDriveStamped
 
 class DrivingController(Node):
@@ -26,7 +26,7 @@ class DrivingController(Node):
         self.drive_pub = self.create_publisher(AckermannDriveStamped, DRIVE_TOPIC, 10)
         self.error_pub = self.create_publisher(ParkingError, "/driving_error", 10)
 
-        self.create_subscription(ConeLocation, "/relative_line", 
+        self.create_subscription(LineLocation, "/relative_line", 
             self.relative_line_callback, 1)
 
 

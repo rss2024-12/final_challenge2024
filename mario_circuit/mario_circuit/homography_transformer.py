@@ -11,7 +11,7 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from ackermann_msgs.msg import AckermannDriveStamped
 from visualization_msgs.msg import Marker
-from vs_msgs.msg import ConeLocation, ConeLocationPixel
+from vs_msgs.msg import LineLocation, LineLocationPixel
 
 #The following collection of pixel locations and corresponding relative
 #ground plane locations are used to compute our homography matrix
@@ -45,9 +45,9 @@ class HomographyTransformer(Node):
     def __init__(self):
         super().__init__("homography_transformer")
 
-        self.line_pub = self.create_publisher(ConeLocation, "/relative_line", 10)
+        self.line_pub = self.create_publisher(LineLocation, "/relative_line", 10)
         self.marker_pub = self.create_publisher(Marker, "/line_marker", 1)
-        self.line_px_sub = self.create_subscription(ConeLocationPixel, "/relative_line_px", self.line_detection_callback, 1)
+        self.line_px_sub = self.create_subscription(LineLocationPixel, "/relative_line_px", self.line_detection_callback, 1)
 
         if not len(PTS_GROUND_PLANE) == len(PTS_IMAGE_PLANE):
             rclpy.logerr("ERROR: PTS_GROUND_PLANE and PTS_IMAGE_PLANE should be of same length")
@@ -75,7 +75,7 @@ class HomographyTransformer(Node):
         x, y = self.transformUvToXy(u, v)
 
         #Publish relative xy position of object in real world
-        relative_xy_msg = ConeLocation()
+        relative_xy_msg = LineLocation()
         relative_xy_msg.x_pos = x
         relative_xy_msg.y_pos = y
 

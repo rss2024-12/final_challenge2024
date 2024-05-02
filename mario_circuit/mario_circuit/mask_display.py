@@ -9,7 +9,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point #geometry_msgs not in CMake file
-from vs_msgs.msg import ConeLocationPixel
+from vs_msgs.msg import LineLocationPixel
 
 from computer_vision.color_segmentation import draw_mask
 
