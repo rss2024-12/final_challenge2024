@@ -10,7 +10,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point #geometry_msgs not in CMake file
-from vs_msgs.msg import LineLocationPixel
+from cs_msgs.msg import LineLocationPixel
 
 
 
@@ -47,13 +47,22 @@ class LineDetector(Node):
     
         # Define lower and upper bounds for the line color in HSV
         lower_bound = np.array([0, 0, 200])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
-        upper_bound = np.array([179, 30, 255])  # Upper bound for white in HSV
+        upper_bound = np.array([179, 50, 255])  # Upper bound for white in HSV
        
-        # Threshold the HSV image to get a binary mask
-        mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
+        # Ignore the top half of the image
+        height, width = img.shape[:2]
+        top_mask = np.zeros_like(hsv_img[:, :, 0])
+        top_mask[height//2:, :] = 255
 
-        # Apply the Hough Line Transform to detect lines in the masked image
-        lines = cv2.HoughLines(mask, rho=1, theta=np.pi/180, threshold=100)
+        # Threshold the HSV image to get a binary mask, combine with top half mask
+        mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
+        mask = cv2.bitwise_and(mask, top_mask)
+        
+        #Refine the edges, only return the edge of a line
+        kernel = np.ones((5,5),np.uint8)
+        mask_dilated = cv2.dilate(mask, kernel, iterations=1)
+        edges = cv2.Canny(mask_dilated, 50, 150)
+        lines = cv2.HoughLines(edges, rho=1, theta=np.pi/180, threshold=200)
         #threshhold is the number of points needed to constitute a line, adjust as needed
 
         max_slope_line = None
@@ -64,29 +73,32 @@ class LineDetector(Node):
             for line in lines:
                 rho, theta = line[0]
                 # Calculate slope (m) from theta (angle)
-                m = -np.tan(theta)
+                m = theta
                 if m > max_slope:
                     max_slope = m
                     max_slope_line = line
         
         if max_slope_line is not None:
+           # Extract the start and end points of the line
             rho, theta = max_slope_line[0]
             a = np.cos(theta)
             b = np.sin(theta)
             x0 = a * rho
             y0 = b * rho
-            
-            # Calculate the endpoints without extending the line
-            x1 = int(x0)
-            y1 = int(y0)
-            x2 = int(x0)
-            y2 = int(y0)
-            
-            # Calculate the midpoint, adjust as needed based on lookahead distance
-            mid_x = (x1 + x2) // 2
-            mid_y = (y1 + y2) // 2
 
-   
+            # Calculate the endpoints of the line
+            x1 = int(x0 + 10000 * (-b))  # Extend the line by a large factor for visualization
+            y1 = int(y0 + 10000 * (a))
+            x2 = int(x0 - 10000 * (-b))
+            y2 = int(y0 - 10000 * (a))
+
+            # Calculate the intersection of lane with image midline
+            mid_y = height // 2 #adjust as needed for lookahead
+
+            # Polar to Cartestian Convert
+            y_int = rho/np.sin(theta)
+            m = -np.cos(theta)/np.sin(theta)
+            mid_x = int((mid_y-y_int)/m)
 
         pixel = LineLocationPixel()
         pixel.u = float(mid_x)

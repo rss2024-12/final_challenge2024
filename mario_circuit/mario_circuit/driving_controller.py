@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 
-from vs_msgs.msg import LineLocation, ParkingError
+from cs_msgs.msg import LineLocation, ParkingError
 from ackermann_msgs.msg import AckermannDriveStamped
 
 class DrivingController(Node):
@@ -40,7 +40,7 @@ class DrivingController(Node):
         half_width = lane_width/2
 
         self.relative_x = msg.x_pos 
-        self.relative_y = msg.y_pos - half_width #potential error, I think x is forward
+        self.relative_y = msg.y_pos + half_width #potential error, I think x is forward
 
         drive_cmd = AckermannDriveStamped()
         

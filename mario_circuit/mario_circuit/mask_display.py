@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 #pulled straight from lab4, no changes should be needed 
+#adjust to also publish the line being followed
 import rclpy
 from rclpy.node import Node
 import numpy as np
@@ -9,7 +10,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point #geometry_msgs not in CMake file
-from vs_msgs.msg import LineLocationPixel
+from cs_msgs.msg import LineLocationPixel
 
 from computer_vision.color_segmentation import draw_mask
 
@@ -41,8 +42,9 @@ class MaskDisplay(Node):
         img_with_box = draw_mask(cv_img)
         pub_img = self.bridge.cv2_to_imgmsg(img_with_box, "8UC1")
         #################################
-
         self.mask_pub.publish(pub_img)
+
+
 
 def main(args=None):
     rclpy.init(args=args)

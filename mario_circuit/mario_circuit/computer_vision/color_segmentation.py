@@ -37,7 +37,7 @@ def cd_color_segmentation(img, template, blackout_regions=False):
     
     # Define lower and upper bounds for the line color in HSV
     lower_bound = np.array([0, 0, 200])  # Lower bound for orange in HSV [0,55,106] to [11,255,255]
-    upper_bound = np.array([179, 30, 255])  # Upper bound for orange in HSV
+    upper_bound = np.array([179, 50, 255])  # Upper bound for orange in HSV
     
     # Create a mask using the defined bounds
     mask = cv2.inRange(hsv_img, lower_bound, upper_bound)

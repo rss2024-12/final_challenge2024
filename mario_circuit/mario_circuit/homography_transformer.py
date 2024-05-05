@@ -11,7 +11,7 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from ackermann_msgs.msg import AckermannDriveStamped
 from visualization_msgs.msg import Marker
-from vs_msgs.msg import LineLocation, LineLocationPixel
+from cs_msgs.msg import LineLocation, LineLocationPixel
 
 #The following collection of pixel locations and corresponding relative
 #ground plane locations are used to compute our homography matrix
