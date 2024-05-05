@@ -43,6 +43,9 @@ class MaskDisplay(Node):
         pub_img = self.bridge.cv2_to_imgmsg(img_with_box, "8UC1")
         #################################
         self.mask_pub.publish(pub_img)
+        #self.get_logger().info('Mask published')
+
+
 
 def main(args=None):
     rclpy.init(args=args)

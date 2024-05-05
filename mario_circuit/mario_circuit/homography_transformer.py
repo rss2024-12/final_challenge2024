@@ -21,10 +21,10 @@ from cs_msgs.msg import LineLocation, LineLocationPixel
 
 ######################################################
 ## DUMMY POINTS -- ENTER YOUR MEASUREMENTS HERE
-PTS_IMAGE_PLANE = [[311, 346],
-                   [429, 346],
-                   [436, 322],
-                   [332, 322]] # dummy points
+PTS_IMAGE_PLANE = [[301, 208], #pixels
+                   [306, 199],
+                   [381, 208],
+                   [375, 198]] # dummy points
 ######################################################
 
 # PTS_GROUND_PLANE units are in inches
@@ -32,10 +32,10 @@ PTS_IMAGE_PLANE = [[311, 346],
 
 ######################################################
 ## DUMMY POINTS -- ENTER YOUR MEASUREMENTS HERE
-PTS_GROUND_PLANE = [[7, 3],
-                    [7, -2],
-                    [9, -3],
-                    [9, 2]] # dummy points
+PTS_GROUND_PLANE = [[39, 5.5], #inches
+                    [47.5, 5.5],
+                    [39, -5.5],
+                    [47.5, -5.5]] # dummy points
 ######################################################
 
 METERS_PER_INCH = 0.0254

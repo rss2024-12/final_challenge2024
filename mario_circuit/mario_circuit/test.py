@@ -15,14 +15,28 @@ def detect_and_draw_line(image_path):
     # Threshold the HSV image to get a binary mask
  # Create a mask for the top half of the image
     height, width = img.shape[:2]
-    top_mask = np.zeros_like(hsv_img[:, :, 0])
-    top_mask[height//2:, :] = 255
+   
+    ###ADD to ROBOT
+    trapezoid_mask = np.zeros_like(hsv_img[:, :, 0])  # Rename mask to trapezoid_mask
+    trap_top_width = int(0.5 * width)  # Width of the top of the trapezoid
+    trap_bottom_width = width  # Width of the bottom of the trapezoid
+   
+
+    # Define the vertices of the trapezoid
+    vertices = np.array([[(width - trap_bottom_width) // 2, 3 * height // 4],  # Bottom left
+                        [width - (width - trap_bottom_width) // 2, 3 * height // 4],  # Bottom right
+                        [width - (width - trap_top_width) // 2, 2*height // 4],  # Top right
+                        [(width - trap_top_width) // 2, 2*height // 4]], dtype=np.int32)  # Top left
+
+    # Fill the trapezoid with white (255)
+    cv2.fillPoly(trapezoid_mask, [vertices], 255)
 
     # Threshold the HSV image to get a binary mask
     mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
-
+    mask = cv2.bitwise_and(mask, trapezoid_mask) 
+    ###END ADD to ROBOT
     # Apply the top mask
-    mask = cv2.bitwise_and(mask, top_mask)
+    mask = cv2.bitwise_and(mask, trapezoid_mask)
     kernel = np.ones((5,5),np.uint8)
     mask_dilated = cv2.dilate(mask, kernel, iterations=1)
 
