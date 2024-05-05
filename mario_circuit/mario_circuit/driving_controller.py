@@ -36,7 +36,7 @@ class DrivingController(Node):
         self.get_logger().info("Driving Controller Initialized")
 
     def relative_line_callback(self, msg):
-        lane_width = 38* 0.0254 #gives Johnson track lane width in m
+        lane_width = 38 * 0.0254 #gives Johnson track lane width in m
         half_width = lane_width/2
 
         self.relative_x = msg.x_pos 
