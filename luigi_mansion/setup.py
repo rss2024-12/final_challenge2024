@@ -1,4 +1,6 @@
 from setuptools import setup
+import glob
+import os
 
 package_name = 'luigi_mansion'
 
@@ -10,6 +12,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/path_planning/launch/sim', glob.glob(os.path.join('launch', 'sim', '*launch.*'))),
+        ('share/path_planning/launch/real', glob.glob(os.path.join('launch', 'real', '*launch.*'))),
+        (os.path.join('share', package_name, 'params', 'sim'), glob.glob('params/sim/*.yaml')),
+        (os.path.join('share', package_name, 'params', 'real'), glob.glob('params/real/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,7 +26,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            
+            'city_drive = luigi_mansion.city_drive_node:main',
+            'stop_drive = luigi_mansion.stop_drive_node:main',
+            'shell_drive = luigi_mansion.shell_drive_node:main'
         ],
     },
 )

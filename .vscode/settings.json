@@ -1,0 +1,24 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/racecar/racecar_ws/build/wall_follower_alex",
+        "/home/racecar/racecar_ws/build/wall_follower",
+        "/home/racecar/racecar_ws/build/path_planning",
+        "/home/racecar/racecar_ws/install/path_planning/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/build/localization",
+        "/home/racecar/racecar_ws/install/wall_follower_alex/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/install/wall_follower/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/install/localization/lib/python3.8/site-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/racecar/racecar_ws/build/wall_follower_alex",
+        "/home/racecar/racecar_ws/build/wall_follower",
+        "/home/racecar/racecar_ws/build/path_planning",
+        "/home/racecar/racecar_ws/install/path_planning/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/build/localization",
+        "/home/racecar/racecar_ws/install/wall_follower_alex/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/install/wall_follower/lib/python3.8/site-packages",
+        "/home/racecar/racecar_ws/install/localization/lib/python3.8/site-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages"
+    ]
+}
