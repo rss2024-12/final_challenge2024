@@ -25,12 +25,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'driving_controller = mario_circuit.parking_controller:main',
-            'cone_detector = mario_circuit.cone_detector:main',
+            'driving_controller = mario_circuit.driving_controller:main',
+            'line_detector = mario_circuit.line_detector:main',
             'homography_transformer = mario_circuit.homography_transformer:main',
             'homography_test = mario_circuit.homography_test:main',
             'cone_box_display = mario_circuit.cone_box_display:main',
-            'mask_display = visual_servoing.mask_display:main'
+            'mask_display = mario_circuit.mask_display:main'
         ],
     },
 )

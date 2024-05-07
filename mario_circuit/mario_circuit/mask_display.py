@@ -39,12 +39,10 @@ class MaskDisplay(Node):
         # pixel location in the image.
         # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
         cv_img = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
-        img_with_box = draw_mask(cv_img)
+        img_with_box = draw_mask(cv_img, self.get_logger().info)
         pub_img = self.bridge.cv2_to_imgmsg(img_with_box, "8UC1")
         #################################
         self.mask_pub.publish(pub_img)
-
-
 
 def main(args=None):
     rclpy.init(args=args)

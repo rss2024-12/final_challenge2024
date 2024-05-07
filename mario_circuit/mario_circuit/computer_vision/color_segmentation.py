@@ -112,7 +112,7 @@ def draw_bounding_box(img):
 
     return img_with_bbox
 
-def draw_mask(img):
+def draw_mask(img, logger = print):
     """
     Draw bounding box on the original image.
     Input:
@@ -124,14 +124,30 @@ def draw_mask(img):
     """
     # Convert BGR image to HSV
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    
+    lower_bound = np.array([0, 0, 200])  # Lower bound for orange in HSV
+    upper_bound = np.array([179, 50, 255])  # Upper bound for orange in HSV
+    mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
+    # logger(f"Original Shape: {img.shape}")
+    # logger(f"Mask Shape:{hsv_img.shape}")
+    height, width, color_ = hsv_img.shape
+  
     # Define lower and upper bounds for the cone color in HSV
-    lower_bound = np.array([5, 50, 50])  # Lower bound for orange in HSV
-    upper_bound = np.array([15, 255, 255])  # Upper bound for orange in HSV
+
+    top_mask = np.zeros_like(hsv_img[:, :, 0])
+    top_mask[height//2:, :] = 255
+    right_mask = np.zeros_like(hsv_img[:,:,0])
+    right_mask[:,width//2:] = 255
+
+        # Threshold the HSV image to get a binary mask, combine with top half mask
+    
+    mask2 = cv2.bitwise_and(mask, top_mask)
+    mask2 = cv2.bitwise_and(mask2, right_mask)
+        
+        #Refine the edges, only return the edge of a line
+    
     
     # Create a mask using the defined bounds
-    mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
-
-    return mask
+   
+    return mask2
     
 # draw_bounding_box('./test_images_cone/test12.jpg')

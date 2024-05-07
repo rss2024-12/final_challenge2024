@@ -34,11 +34,18 @@ class LineDetector(Node):
 
         self.get_logger().info("Line Detector Initialized")
 
+
+
+    
     def image_callback(self, image_msg):
         # This takes in the image and will extract the line directly to the left of the car
         #this line will be white (HSV filter) and have the most positive slope
         # publish this pixel (u, v) to the /relative_line_px topic; the homography transformer will
         # convert it to the car frame.
+
+        mid_x = None
+        mid_y = None
+
 
         #################################
         cv_img = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
@@ -50,21 +57,36 @@ class LineDetector(Node):
         upper_bound = np.array([179, 50, 255])  # Upper bound for white in HSV
        
         # Ignore the top half of the image
-        height, width = img.shape[:2]
+        height = image_msg.height
+        width = image_msg.width
+        #self.get_logger().info(f'Height:{height}')
         top_mask = np.zeros_like(hsv_img[:, :, 0])
         top_mask[height//2:, :] = 255
+        right_mask = np.zeros_like(hsv_img[:,:,0])
+        right_mask[:,width//2:] = 255
 
         # Threshold the HSV image to get a binary mask, combine with top half mask
         mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
         mask = cv2.bitwise_and(mask, top_mask)
+        mask = cv2.bitwise_and(mask, right_mask)
         
+       
+        ### Mask CB
+        # cv_img = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
+        # img_with_box = draw_mask(cv_img)
+        # pub_img = self.bridge.cv2_to_imgmsg(img_with_box, "8UC1")
+        # #################################
+
+        # self.mask_pub.publish(pub_img)
+       
+       
         #Refine the edges, only return the edge of a line
         kernel = np.ones((5,5),np.uint8)
         mask_dilated = cv2.dilate(mask, kernel, iterations=1)
         edges = cv2.Canny(mask_dilated, 50, 150)
-        lines = cv2.HoughLines(edges, rho=1, theta=np.pi/180, threshold=200)
+        lines = cv2.HoughLines(edges, rho=1, theta=np.pi/180, threshold=100)
         #threshhold is the number of points needed to constitute a line, adjust as needed
-
+        #self.get_logger().info(f'Lines: {lines}')
         max_slope_line = None
         max_slope = -np.inf
 
@@ -77,7 +99,7 @@ class LineDetector(Node):
                 if m > max_slope:
                     max_slope = m
                     max_slope_line = line
-        
+        #self.get_logger().info(f'Lines {lines}')
         if max_slope_line is not None:
            # Extract the start and end points of the line
             rho, theta = max_slope_line[0]
@@ -93,23 +115,35 @@ class LineDetector(Node):
             y2 = int(y0 - 10000 * (a))
 
             # Calculate the intersection of lane with image midline
-            mid_y = height // 2 #adjust as needed for lookahead
+            mid_y = 3*height // 5 #adjust as needed for lookahead
 
             # Polar to Cartestian Convert
             y_int = rho/np.sin(theta)
             m = -np.cos(theta)/np.sin(theta)
             mid_x = int((mid_y-y_int)/m)
 
+     
+        if mid_x == None and mid_y == None:
+            mid_x = width//2
+            mid_y = 3*height//5
         pixel = LineLocationPixel()
         pixel.u = float(mid_x)
         pixel.v = float(mid_y)
+        self.get_logger().info(f'Pixel X, Pixel, Y: {mid_x,mid_y}' )
         self.line_pub.publish(pixel)
         #################################
 
-        image = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
+        # image = self.bridge.imgmsg_to_cv2(image_msg, "bgr8")
 
-        debug_msg = self.bridge.cv2_to_imgmsg(image, "bgr8")
-        self.debug_pub.publish(debug_msg)
+        # debug_msg = self.bridge.cv2_to_imgmsg(image, "bgr8")
+        # self.debug_pub.publish(debug_msg)
+
+        ####Test for topic publisher
+        if max_slope_line is not None:
+            cv_img2 = cv2.line(cv_img, (x1, y1), (x2, y2), (0, 255, 0), 5)  # Draw the line in green
+            cv_img2 = cv2.circle(cv_img2, (mid_x, mid_y), 10, (255, 0, 0), -1)
+            debug_image = self.bridge.cv2_to_imgmsg(cv_img2, "bgr8")
+            self.debug_pub.publish(debug_image)
 
 def main(args=None):
     rclpy.init(args=args)

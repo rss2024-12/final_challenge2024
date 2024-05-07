@@ -4,7 +4,7 @@
   
  
   <node pkg="mario_circuit" name="driving_controller" exec="driving_controller" output="screen">
-  	<param from="$(find-pkg-share mario_circuit)/mario_circuit/params.yaml"/>
+    <param name="drive_topic" value="/vesc/low_level/input/navigation" />
   </node>
 
  
@@ -15,7 +15,7 @@
   <node pkg="mario_circuit" name="mask_display" exec="mask_display" output="screen">
   </node>
 
-  <node pkg="mario_circuit" name="line_detector" exec="cone_detector" output="screen">
+  <node pkg="mario_circuit" name="line_detector" exec="line_detector" output="screen">
   </node>
 
  

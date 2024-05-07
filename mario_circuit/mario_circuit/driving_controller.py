@@ -20,9 +20,7 @@ class DrivingController(Node):
 
         self.declare_parameter("drive_topic")
         DRIVE_TOPIC = self.get_parameter("drive_topic").value # set in launch file; different for simulator vs racecar
-        self.declare_parameter("drive_speed")
-        self.speed = self.get_parameter("drive_speed").value#from params
-
+        self.speed = 1.0       
         self.drive_pub = self.create_publisher(AckermannDriveStamped, DRIVE_TOPIC, 10)
         self.error_pub = self.create_publisher(ParkingError, "/driving_error", 10)
 
@@ -36,12 +34,12 @@ class DrivingController(Node):
         self.get_logger().info("Driving Controller Initialized")
 
     def relative_line_callback(self, msg):
-        lane_width = 38 * 0.0254 #gives Johnson track lane width in m
+        lane_width = 34 * 0.0254 #gives Johnson track lane width in m
         half_width = lane_width/2
 
         self.relative_x = msg.x_pos 
         self.relative_y = msg.y_pos + half_width #potential error, I think x is forward
-
+        self.get_logger().info(f'x distance, y distance: {self.relative_x, self.relative_y}')
         drive_cmd = AckermannDriveStamped()
         
         L = .32 # distance between front and back wheels im m
@@ -49,11 +47,12 @@ class DrivingController(Node):
         L1 = np.sqrt((self.relative_x)**2 + (self.relative_y)**2) 
         theta = np.arctan(self.relative_x/self.relative_y)
         eta = np.pi/2 - theta
-        delta = np.arctan((2*L*np.sin(eta))/L1) 
+        delta = -np.arctan((2*L*np.sin(eta))/L1) 
 
        
         drive_cmd.drive.steering_angle = delta
         drive_cmd.drive.speed = self.speed
+        self.get_logger().info(f'Delta, speed {delta,self.speed}')
         self.drive_pub.publish(drive_cmd)
         
 

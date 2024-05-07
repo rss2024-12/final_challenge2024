@@ -24,7 +24,7 @@ class ConeBoxDisplay(Node):
         self.display_bounding_box = self.create_subscription(Image, "/zed/zed_node/rgb/image_rect_color", self.image_callback, 5)
         self.bridge = CvBridge() # Converts between ROS images and OpenCV Images
 
-        self.get_logger().info("Cone Box Display Initialized")
+        self.get_logger().info("Line Display Initialized")
 
     def image_callback(self, image_msg):
         # Apply your imported color segmentation function (cd_color_segmentation) to the image msg here

@@ -78,6 +78,7 @@ class HomographyTransformer(Node):
         relative_xy_msg = LineLocation()
         relative_xy_msg.x_pos = x
         relative_xy_msg.y_pos = y
+        #self.get_logger().info(f'x,y {x,y}')
 
         self.line_pub.publish(relative_xy_msg)
 
