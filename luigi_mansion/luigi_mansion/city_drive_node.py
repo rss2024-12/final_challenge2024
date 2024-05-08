@@ -4,10 +4,10 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray
 from ackermann_msgs.msg import AckermannDriveStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 
 from .utils import LineTrajectory
-
+from trajectory_planner_local import PathPlan
 class CityDrive(Node):
     '''
     ROS2 Node in charge of taking the midline trajectory to create a path and drive commands
@@ -50,6 +50,9 @@ class CityDrive(Node):
         self.trajectory = LineTrajectory(self, "followed_trajectory")
         self.offset = LineTrajectory(self, "offset_trajectory")
         self.offset_publisher = self.create_publisher(PoseArray, "/offset_path", 10)
+        self.planner = PathPlan(self)
+
+        self.map_sub = self.create_subscription(OccupancyGrid, self.planner.map_topic, self.planner.map_cb,1)
     
     #### 
     def midline_cb(self, msg):
@@ -149,6 +152,7 @@ class CityDrive(Node):
             min_pt = self.offset_traj_points[min_idx_to_shell]
             ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
             ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
+            traj_to_shell = self.planner.plan_path()
         ## fourth: add each of these paths to the offsetted trajectory 
             #### store each iterated and new-created trajectory to a new final trajectory (possibly a merge function)
 
@@ -164,53 +168,11 @@ class CityDrive(Node):
             points[idx] = np.array([pose.position.x,pose.position.y])
         return points
     
-
-
-    # path planning functions from lab 6 to find optimal path to each shell from 
-    # closet point in offset trajectory
-    def plan_path(self, start_point, end_point, map):
+    def numpy_to_PoseStamped(self,array:np.ndarray):
         """
-        Plan a path from the start point to the end point on the given map graph.
-
-        Parameters:
-        start_point (PoseStamped): The start point in the map frame.
-        end_point (PoseStamped): The end point in the map frame.
-        map (OccupancyGrid): An instance of the nav_msgs/OccupancyGrid message,
-                              representing the map graph on which the path is to be planned.
-
-        Returns:
-        list: A list representing the planned path from the start point to the end point.
-              Each element in the list is a tuple containing the (x, y) coordinates of a point along the path.
-              Example: [(x1, y1), (x2, y2), ..., (xn, yn)]
-
-        Notes:
-        - The path planning process involves the following steps:
-          1. Sample random points in grid space.
-          2. Keep points that are viable.
-          3. Connect each viable point to all other points, creating edges.
-          4. Remove edges that intersect obstacles.
-          5. Run the A* search algorithm on the viable trajectories.
+        Helper function that turns an np.ndarray into a PoseStamped 
+        object.
         """
-        start_node = (start_point.pose.position.x, start_point.pose.position.y)
-        end_node = (end_point.position.x, end_point.position.y)
-
-         # Find nearest nodes to start and end in the graph
-        _, start_index = self.kd_tree.query(start_node)
-        _, end_index = self.kd_tree.query(end_node)
-
-        # Run A* on the graph
-        path = self.astar(self.graph, start_index, end_index) # outputs a list of indices for what node the path has
-
-        # Turn indices into their coordinates
-        path_coord = self.path_index_coord(path)
-
-        path_array = self.path_index_posearray(path)
-        # self.vis_path.publish(path_array)
-
-        self.trajectory.points = path_coord
-        # self.get_logger().info('Path %s' % path_coord)
-        self.traj_pub.publish(self.trajectory.toPoseArray())
-        self.trajectory.publish_viz()
 
     #### TAs pick three points
 
