@@ -35,12 +35,12 @@ class PathPlan():
     current car pose.
     """
     def __init__(self,node):
-        super().__init__("trajectory_planner")
-        node.declare_parameter('odom_topic', "default")
+        #super().__init__("trajectory_planner")
+        # node.declare_parameter('odom_topic', "default")
         node.declare_parameter('map_topic', "default")
         node.declare_parameter('initial_pose_topic', "default")
 
-        self.odom_topic = node.get_parameter('odom_topic').get_parameter_value().string_value
+        # self.odom_topic = node.get_parameter('odom_topic').get_parameter_value().string_value
         self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
         self.initial_pose_topic = node.get_parameter('initial_pose_topic').get_parameter_value().string_value
         self.node = node

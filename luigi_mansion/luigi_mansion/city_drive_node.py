@@ -7,7 +7,8 @@ from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
 
 from .utils import LineTrajectory
-from trajectory_planner_local import PathPlan
+from .trajectory_planner_local import PathPlan
+
 class CityDrive(Node):
     '''
     ROS2 Node in charge of taking the midline trajectory to create a path and drive commands
@@ -44,22 +45,33 @@ class CityDrive(Node):
 
         #### Given midline trajectory
         self.midline_subscriber = self.create_subscription(PoseArray, "/trajectory/current" , self.midline_cb, 1)
+        self.get_logger().info("Created midline sub")
         self.shell_sub = self.create_subscription(PoseArray, self.SHELL_TOPIC, self.shell_cb, 1)
+        self.get_logger().info("Created shell sub")
         self.wheelbase_length = .32*1.5
 
         self.trajectory = LineTrajectory(self, "followed_trajectory")
+        self.get_logger().info("Created trajectory traj class instance")
         self.offset = LineTrajectory(self, "offset_trajectory")
+        self.get_logger().info("Created offset traj class intsance")
         self.offset_publisher = self.create_publisher(PoseArray, "/offset_path", 10)
+        self.get_logger().info("Created offset publisher")
         self.planner = PathPlan(self)
+        self.get_logger().info("Created planner class instance")
 
         self.map_sub = self.create_subscription(OccupancyGrid, self.planner.map_topic, self.planner.map_cb,1)
+        self.get_logger().info("Created map sub")
         self.interp = LineTrajectory(self, "interp_trajectory")
+        self.get_logger().info("Created interp traj class instance")
         self.interp_publisher = self.create_publisher(PoseArray, '/interpolated_path', 10)
+        self.get_logger().info("Created interp publisher")
 
         self.offset_sub = self.create_subscription(PoseArray, "/offset_path", self.offset_cb, 1)
+        self.get_logger().info("Created offset subscriber")
         self.offset_points = None
+        self.get_logger().info("Created offset points object None")
 
-    #### 
+
     def midline_cb(self, msg):
         """
         msg: PoseArray object representing points along a midline piecewise line segment.
@@ -198,8 +210,12 @@ class CityDrive(Node):
         """
         Callback that receives the offset trajectory points.
         """
-        self.offset_points = array.poses
-    
+        if array.poses:
+            self.offset_points = array.poses
+            self.get_logger().info(f"Offset points received: {len(self.offset_points)} points")
+        else:
+            self.get_logger().warn("Received empty offset trajectory")
+        
     def shell_cb(self,msg):
         """
         Callback to process the shells placed by TAs and path plan them into
@@ -216,17 +232,21 @@ class CityDrive(Node):
         ## first: extract points from /shell_points
         ## second: perform vectorized distance calculation with each one of the points to find closest point 'p' on
                 ## offsetted trajectory
+        self.get_logger().info("Shell callback initiated.")
+        self.get_logger().info(f"{self.offset_points}")
         if self.offset_points is not None:
+            self.get_logger().info("Recieved offset trajectory.")
             offset_traj = self.offset.toPoseArray() # full offset trajectory
             # for all 3 shells
-            for point in enumerate(self.shell_points):
+            for index, point in enumerate(self.shell_points):
+                self.get_logger().info(f"Shell {index}")
                 # path planning
-                start_pt,end_pt = self.find_intersection_points(self.offset_traj_point)
+                start_pt,end_pt = self.find_intersection_points(np.array(self.offset.points), point, 5.)
                 start_PS = self.numpy_to_PoseStamped(start_pt)
                 shell_PS = self.numpy_to_PoseStamped(point)
                 end_PS = self.numpy_to_PoseStamped(end_pt)
-                start_to_shell = self.planner.plan_path(start_PS,shell_PS)
-                shell_to_end = self.planner.plan_path(shell_PS,end_PS)
+                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.planner.map)
+                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.planner.map)
 
                 # pose arrays of trajectories
                 st_to_shPS = start_to_shell.toPoseArray() # start to shell
@@ -244,10 +264,10 @@ class CityDrive(Node):
                 new_pose_array.poses.extend(offset_traj.poses[:start_index])
 
                 # Append poses from start_to_shell
-                new_pose_array.poses.extend(start_to_shell.poses)
+                new_pose_array.poses.extend(st_to_shPS.poses)
 
                 # Append poses from shell_to_end
-                new_pose_array.poses.extend(shell_to_end.poses)
+                new_pose_array.poses.extend(sh_to_ePS.poses)
 
                 # Append poses from offset_traj from end index onwards
                 new_pose_array.poses.extend(offset_traj.poses[end_index:])
