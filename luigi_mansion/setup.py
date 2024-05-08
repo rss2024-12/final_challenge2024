@@ -28,7 +28,7 @@ setup(
         'console_scripts': [
             'city_drive = luigi_mansion.city_drive_node:main',
             'stop_drive = luigi_mansion.stop_drive_node:main',
-            'shell_drive = luigi_mansion.shell_drive_node:main'
+            'shell_drive = luigi_mansion.shell_drive_node:main',
             'basement_point_pub = luigi_mansion.basement_point_publisher:main',
             'stop_detector = luigi_mansion.stop_detector.stop_detector:main', 
         ],

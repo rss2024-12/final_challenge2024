@@ -50,6 +50,8 @@ class CityDrive(Node):
         self.trajectory = LineTrajectory(self, "followed_trajectory")
         self.offset = LineTrajectory(self, "offset_trajectory")
         self.offset_publisher = self.create_publisher(PoseArray, "/offset_path", 10)
+        self.interp = LineTrajectory(self, "interp_trajectory")
+        self.interp_publisher = self.create_publisher(PoseArray, '/interpolated_path', 10)
     
     #### 
     def midline_cb(self, msg):
@@ -63,14 +65,24 @@ class CityDrive(Node):
         if len(msg.poses) < 3:  # Requires at least three points to calculate angles
             self.get_logger().error("Received trajectory is too short to compute offset.")
             return
+        
+        # Interpolate the trajectory
+        interpolated_trajectory = self.interpolate_trajectory(msg)
+        self.get_logger().info(f"Interpolated trajectory with {len(interpolated_trajectory.poses)} points")
+
+        # Publishing the interpolated trajectory
+        self.interp_publisher.publish(interpolated_trajectory)
+        self.interp.fromPoseArray(interpolated_trajectory)
+        self.interp.publish_viz(offset=0.0)
+        self.get_logger().info("Published interp trajectory.")
 
         offset_points = []
-        side = 1.0  # -1.0 is left, 1.0 is right
+        side = -1.0  # -1.0 is left, 1.0 is right
 
-        for i in range(1, len(msg.poses) - 1):
-            p_prev = np.array([msg.poses[i - 1].position.x, msg.poses[i - 1].position.y])
-            p_curr = np.array([msg.poses[i].position.x, msg.poses[i].position.y])
-            p_next = np.array([msg.poses[i + 1].position.x, msg.poses[i + 1].position.y])
+        for i in range(1, len(interpolated_trajectory.poses) - 1):
+            p_prev = np.array([interpolated_trajectory.poses[i - 1].position.x, interpolated_trajectory.poses[i - 1].position.y])
+            p_curr = np.array([interpolated_trajectory.poses[i].position.x, interpolated_trajectory.poses[i].position.y])
+            p_next = np.array([interpolated_trajectory.poses[i + 1].position.x, interpolated_trajectory.poses[i + 1].position.y])
 
             # Calculate and normalize direction vectors
             v1 = p_curr - p_prev
@@ -98,21 +110,21 @@ class CityDrive(Node):
             offset_points.append(offset_point)
 
         # Add the first and last points with only the regular offset
-        first_point = np.array([msg.poses[0].position.x, msg.poses[0].position.y])
-        last_point = np.array([msg.poses[-1].position.x, msg.poses[-1].position.y])
-        first_direction = np.array([msg.poses[1].position.x, msg.poses[1].position.y]) - first_point
+        first_point = np.array([interpolated_trajectory.poses[0].position.x, interpolated_trajectory.poses[0].position.y])
+        last_point = np.array([interpolated_trajectory.poses[-1].position.x, interpolated_trajectory.poses[-1].position.y])
+        first_direction = np.array([interpolated_trajectory.poses[1].position.x, interpolated_trajectory.poses[1].position.y]) - first_point
         first_direction /= np.linalg.norm(first_direction)
         first_perpendicular = np.array([-first_direction[1], first_direction[0]])
         offset_points.insert(0, first_point + side * self.wheelbase_length * first_perpendicular)
 
-        last_direction = last_point - np.array([msg.poses[-2].position.x, msg.poses[-2].position.y])
+        last_direction = last_point - np.array([interpolated_trajectory.poses[-2].position.x, interpolated_trajectory.poses[-2].position.y])
         last_direction /= np.linalg.norm(last_direction)
         last_perpendicular = np.array([-last_direction[1], last_direction[0]])
         offset_points.append(last_point + side * self.wheelbase_length * last_perpendicular)
 
         # Creating a new PoseArray for the offset trajectory
         offset_pose_array = PoseArray()
-        offset_pose_array.header = msg.header
+        offset_pose_array.header = interpolated_trajectory.header
         for point in offset_points:
             pose = Pose()
             pose.position.x = point[0]
@@ -126,6 +138,58 @@ class CityDrive(Node):
         self.offset.publish_viz(offset=0.0)
         self.get_logger().info("Published offset trajectory.")
 
+    def interpolate_trajectory(self, pose_array, point_spacing=1.0):
+        """
+        Interpolates additional points between each pair of consecutive points in the provided PoseArray based on segment length.
+        
+        Args:
+            pose_array (PoseArray): The original PoseArray to interpolate.
+            point_spacing (float): Desired approximate spacing between interpolated points in meters.
+        
+        Returns:
+            PoseArray: A new PoseArray containing the original points and the interpolated points.
+        """
+        interpolated_poses = []
+
+        # Iterate over each segment
+        for i in range(len(pose_array.poses) - 1):
+            start_pose = pose_array.poses[i]
+            end_pose = pose_array.poses[i + 1]
+
+            # Start and end points
+            start_point = np.array([start_pose.position.x, start_pose.position.y])
+            end_point = np.array([end_pose.position.x, end_pose.position.y])
+
+            # Calculate segment length
+            segment_length = np.linalg.norm(end_point - start_point)
+
+            # Calculate the number of points to interpolate based on the segment length and point spacing
+            points_per_segment = max(int(segment_length / point_spacing), 1)  # Ensure at least one point
+
+            # Add the start pose of the segment
+            interpolated_poses.append(start_pose)
+
+            # Compute and add interpolated points
+            for j in range(1, points_per_segment):
+                t = j / points_per_segment
+                interpolated_point = (1 - t) * start_point + t * end_point
+                new_pose = Pose()
+                new_pose.position.x = interpolated_point[0]
+                new_pose.position.y = interpolated_point[1]
+                new_pose.orientation = start_pose.orientation  # Assuming no change in orientation
+                interpolated_poses.append(new_pose)
+
+        # Add the last pose of the original trajectory
+        interpolated_poses.append(pose_array.poses[-1])
+
+        # Create a new PoseArray with interpolated poses
+        new_pose_array = PoseArray()
+        new_pose_array.header = pose_array.header
+        new_pose_array.poses = interpolated_poses
+        return new_pose_array
+
+
+    
     def shell_cb(self,msg):
         """
         Callback to process the shells placed by TAs and path plan them into
