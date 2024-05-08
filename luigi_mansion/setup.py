@@ -30,7 +30,8 @@ setup(
             'stop_drive = luigi_mansion.stop_drive_node:main',
             'shell_drive = luigi_mansion.shell_drive_node:main',
             'basement_point_pub = luigi_mansion.basement_point_publisher:main',
-            'stop_detector = luigi_mansion.stop_detector.stop_detector:main', 
+            'stop_detector = luigi_mansion.stop_detector.stop_detector:main',
+            # 'trajectory_planner_local = luigi_mansion.trajectory_planner_local:main'
         ],
     },
 )

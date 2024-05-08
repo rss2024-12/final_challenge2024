@@ -564,10 +564,11 @@ class PathPlan():
         return pixel_x, pixel_y
 
 
-
-
-def main(args=None):
-    rclpy.init(args=args)
+if __name__ == "main":
     planner = PathPlan()
-    rclpy.spin(planner)
-    rclpy.shutdown()
+
+# def main(args=None):
+#     # rclpy.init(args=args)
+#     planner = PathPlan()
+    # rclpy.spin(planner)
+    # rclpy.shutdown()
