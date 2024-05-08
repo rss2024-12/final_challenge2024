@@ -2,7 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 
-from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray
+from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
 
@@ -55,7 +55,10 @@ class CityDrive(Node):
         self.map_sub = self.create_subscription(OccupancyGrid, self.planner.map_topic, self.planner.map_cb,1)
         self.interp = LineTrajectory(self, "interp_trajectory")
         self.interp_publisher = self.create_publisher(PoseArray, '/interpolated_path', 10)
-    
+
+        self.offset_sub = self.create_subscription(PoseArray, "/offset_path", self.offset_cb, 1)
+        self.offset_points = None
+
     #### 
     def midline_cb(self, msg):
         """
@@ -191,7 +194,11 @@ class CityDrive(Node):
         new_pose_array.poses = interpolated_poses
         return new_pose_array
 
-
+    def offset_cb(self,array:PoseArray):
+        """
+        Callback that receives the offset trajectory points.
+        """
+        self.offset_points = array.poses
     
     def shell_cb(self,msg):
         """
@@ -202,42 +209,95 @@ class CityDrive(Node):
             msg: (PoseArray) PoseArray object of the shell poses
         
         """
-        self.shell_points = self.pose_array_to_numpy(msg.poses)
+        self.shell_points = np.array(msg)
         ### insert path planning to each shell here 
-
+        self.shell_path = LineTrajectory(self, "shell_path")
         #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass
         ## first: extract points from /shell_points
         ## second: perform vectorized distance calculation with each one of the points to find closest point 'p' on
                 ## offsetted trajectory
-        for point in self.shell_points:
-            x_s = point[0]*np.ones(len(self.offset_traj_points))
-            y_s = point[1]*np.ones(len(self.offset_traj_points))
-            min_idx_to_shell = np.argmin((np.sqrt((self.offset_traj_points[:,0]-x_s)**2 + (self.offset_traj_points[:,1]-y_s)**2)))
-            min_pt = self.offset_traj_points[min_idx_to_shell]
-            ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
-            ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
-            traj_to_shell = self.planner.plan_path()
+        if self.offset_points is not None:
+            offset_traj = self.offset.toPoseArray() # full offset trajectory
+            # for all 3 shells
+            for point in enumerate(self.shell_points):
+                # path planning
+                start_pt,end_pt = self.find_intersection_points(self.offset_traj_point)
+                start_PS = self.numpy_to_PoseStamped(start_pt)
+                shell_PS = self.numpy_to_PoseStamped(point)
+                end_PS = self.numpy_to_PoseStamped(end_pt)
+                start_to_shell = self.planner.plan_path(start_PS,shell_PS)
+                shell_to_end = self.planner.plan_path(shell_PS,end_PS)
+
+                # pose arrays of trajectories
+                st_to_shPS = start_to_shell.toPoseArray() # start to shell
+                sh_to_ePS = shell_to_end.toPoseArray() # shell to end
+
+                # Find the start index in offset_traj
+                start_index = np.where(np.all(offset_traj == start_pt, axis=1))[0][0]
+                end_index = np.where(np.all(offset_traj == end_pt, axis=1))[0][0]
+
+                # Create a new PoseArray object for the shell path
+                new_pose_array = PoseArray()
+                new_pose_array.poses = []
+
+                # Append poses from offset_traj to the start index
+                new_pose_array.poses.extend(offset_traj.poses[:start_index])
+
+                # Append poses from start_to_shell
+                new_pose_array.poses.extend(start_to_shell.poses)
+
+                # Append poses from shell_to_end
+                new_pose_array.poses.extend(shell_to_end.poses)
+
+                # Append poses from offset_traj from end index onwards
+                new_pose_array.poses.extend(offset_traj.poses[end_index:])
+
+                # Assign the new PoseArray object to shell_path
+                self.shell_path.fromPoseArray(new_pose_array)
+                self.shell_path.publish_viz(offset=0.0)
+                self.get_logger().info("Published shell trajectory.")
+                
+
+                ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
+                ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
         ## fourth: add each of these paths to the offsetted trajectory 
             #### store each iterated and new-created trajectory to a new final trajectory (possibly a merge function)
 
 
     ### HELPER FUNCTIONS ###
-    def pose_array_to_numpy(self,array:PoseArray):
+    # def pose_array_to_numpy(self,array:PoseArray):
+    #     """
+    #     Helper function that takes in a PoseArray and converts it into
+    #     a np.array of x,y coordinates.
+    #     """
+    #     points = np.zeros(len(array))
+    #     for idx,pose in enumerate(array.poses):
+    #         points[idx] = np.array([pose.position.x,pose.position.y])
+    #     return points
+    def find_intersection_points(self,trajectory_points:np.ndarray,circle_center:np.ndarray,radius:float):
         """
-        Helper function that takes in a PoseArray and converts it into
-        a np.array of x,y coordinates.
+        Function that will find the intersection points between a circle of size radius
+        around the shell.
         """
-        points = np.zeros(len(array))
-        for idx,pose in enumerate(array.poses):
-            points[idx] = np.array([pose.position.x,pose.position.y])
-        return points
-    
+        distances = np.sqrt((trajectory_points[:,0]-circle_center[0])**2 + (trajectory_points[:,1]-circle_center[1])**2)
+        intersection_mask = distances <= radius
+        intersection_pts = trajectory_points[intersection_mask]
+        start_pt = intersection_pts[0]
+        end_pt = intersection_pts[-1]
+
+        return (start_pt,end_pt)
+
     def numpy_to_PoseStamped(self,array:np.ndarray):
         """
         Helper function that turns an np.ndarray into a PoseStamped 
         object.
         """
-
+        pose = PoseStamped()
+        pose.header.frame_id = "map"
+        pose.pose.position.x = array[0]
+        pose.pose.position.y = array[1]
+        pose.pose.position.z = 0
+        return pose
     #### TAs pick three points
 
     #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass
