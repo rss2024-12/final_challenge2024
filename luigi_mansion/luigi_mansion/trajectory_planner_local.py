@@ -30,95 +30,95 @@ from tf_transformations import euler_from_quaternion
 ###
 
 
-class PathPlan(Node):
+class PathPlan():
     """ Listens for goal pose published by RViz and uses it to plan a path from
     current car pose.
     """
-    def __init__(self):
-        super().__init__("trajectory_planner")
-        self.declare_parameter('odom_topic', "default")
-        self.declare_parameter('map_topic', "default")
-        self.declare_parameter('initial_pose_topic', "default")
+    def __init__(self,node):
+        #super().__init__("trajectory_planner")
+        # node.declare_parameter('odom_topic', "default")
+        node.declare_parameter('map_topic', "default")
+        node.declare_parameter('initial_pose_topic', "default")
 
-        self.odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
-        self.map_topic = self.get_parameter('map_topic').get_parameter_value().string_value
-        self.initial_pose_topic = self.get_parameter('initial_pose_topic').get_parameter_value().string_value
-
+        # self.odom_topic = node.get_parameter('odom_topic').get_parameter_value().string_value
+        self.map_topic = node.get_parameter('map_topic').get_parameter_value().string_value
+        self.initial_pose_topic = node.get_parameter('initial_pose_topic').get_parameter_value().string_value
+        self.node = node
 
         # SUBSCRIPTIONS
         # Gets called when the map is received
-        self.map_sub = self.create_subscription(
-            OccupancyGrid,
-            self.map_topic,
-            self.map_cb,
-            1)
+        # self.map_sub = node.create_subscription(
+        #     OccupancyGrid,
+        #     self.map_topic,
+        #     self.map_cb,
+        #     1)
 
         # Gets called when the goal is received
-        self.goal_sub = self.create_subscription(
-            PoseStamped,
-            "/goal_pose",
-            self.goal_cb,
-            10
-        )
+        # self.goal_sub = node.create_subscription(
+        #     PoseStamped,
+        #     "/goal_pose",
+        #     self.goal_cb,
+        #     10
+        # )
 
-        # Sets the curent pose to the particle filter pose
-        self.pf_sub = self.create_subscription(
-            Odometry,
-            "/pf/pose/odom",
-            self.pf_cb,
-            10
-        )
+        # Sets the current pose to the particle filter pose
+        # self.pf_sub = node.create_subscription(
+        #     Odometry,
+        #     "/pf/pose/odom",
+        #     self.pf_cb,
+        #     10
+        # )
 
         # Needed for path visualization
-        self.start_sub = self.create_subscription(
-            Marker,
-            '/planned_trajectory/start_point',
-            self.start_cb,
-            10
-        )
+        # self.start_sub = node.create_subscription(
+        #     Marker,
+        #     '/planned_trajectory/start_point',
+        #     self.start_cb,
+        #     10
+        # )
 
         # Gets called when the initial pose is received from Rviz
-        self.pose_sub = self.create_subscription(
-            PoseWithCovarianceStamped,
-            self.initial_pose_topic,
-            self.pose_cb,
-            10
-        )
+        # self.pose_sub = node.create_subscription(
+        #     PoseWithCovarianceStamped,
+        #     self.initial_pose_topic,
+        #     self.pose_cb,
+        #     10
+        # )
 
         ## PUBLISHERS
-        self.traj_pub = self.create_publisher(
-            PoseArray,
-            "/trajectory/current",
-            10
-        )
+        # self.traj_pub = node.create_publisher(
+        #     PoseArray,
+        #     "/trajectory/current",
+        #     10
+        # )
 
         # Used to visualize the nodes of the PRM graph
-        self.graph_vis_pub = self.create_publisher(
-            PointCloud2,
-            "/graph_points",
-            10
-        )
+        # self.graph_vis_pub = node.create_publisher(
+        #     PointCloud2,
+        #     "/graph_points",
+        #     10
+        # )
 
         # Publisher for testing pixel_to_map_coordinate method
-        self.test_pub = self.create_publisher(
-            PoseStamped,
-            "/test_pose",
-            10
-        )
+        # self.test_pub = node.create_publisher(
+        #     PoseStamped,
+        #     "/test_pose",
+        #     10
+        # )
 
-        self.test_pub_1 = self.create_publisher(
-            PoseStamped,
-            "/test_pose_1",
-            10
-        )
+        # self.test_pub_1 = node.create_publisher(
+        #     PoseStamped,
+        #     "/test_pose_1",
+        #     10
+        # )
 
-        self.vis_path = self.create_publisher(
-            PoseArray,
-            "/vis_path",
-            10
-        )
+        # self.vis_path = node.create_publisher(
+        #     PoseArray,
+        #     "/vis_path",
+        #     10
+        # )
         
-        self.trajectory = LineTrajectory(node=self, viz_namespace="/planned_trajectory")
+        self.trajectory = LineTrajectory(node=node, viz_namespace="/planned_trajectory")
 
 
        
@@ -156,36 +156,36 @@ class PathPlan(Node):
 
         self.map = dilated_occupancy_grid_msg
 
-        self.get_logger().info('Generating')
+        self.node.get_logger().info('Generating')
         self.generate_prm()
-        self.get_logger().info('Generated')
+        self.node.get_logger().info('Generated')
         self.visualize_prm(self.valid_points)
-        self.get_logger().info('Visualized')
+        self.node.get_logger().info('Visualized')
         #raise NotImplementedError
 
-    def pose_cb(self, pose):
-        #type is PoseWithCovarianceStamped
+    # def pose_cb(self, pose):
+    #     #type is PoseWithCovarianceStamped
 
-        self.current_pose = pose.pose
-        self.get_logger().info('Current X %s' % self.current_pose.pose.position.x)
-        self.get_logger().info('Current Y %s' % self.current_pose.pose.position.y)
+    #     self.current_pose = pose.pose
+    #     self.node.get_logger().info('Current X %s' % self.current_pose.pose.position.x)
+    #     self.node.get_logger().info('Current Y %s' % self.current_pose.pose.position.y)
         
         #this is where you pass through the particle filter pose
         # raise NotImplementedError
 
-    def pf_cb(self, pose):
-        # type of Odometry message
-        self.current_pose = pose.pose
+    # def pf_cb(self, pose):
+    #     # type of Odometry message
+    #     self.current_pose = pose.pose
 
 
-    def goal_cb(self, msg):
-        #type is PoseStamped
-        self.goal_pose = msg.pose
-        self.get_logger().info('Goal X %s' % self.goal_pose.position.x)
-        self.get_logger().info('Goal Y %s' % self.goal_pose.position.y)
-        #should have a call to pathfinding here
+    # def goal_cb(self, msg):
+    #     #type is PoseStamped
+    #     self.goal_pose = msg.pose
+    #     self.node.get_logger().info('Goal X %s' % self.goal_pose.position.x)
+    #     self.node.get_logger().info('Goal Y %s' % self.goal_pose.position.y)
+    #     #should have a call to pathfinding here
         
-        self.plan_path(self.current_pose, self.goal_pose, self.map)
+    #     self.plan_path(self.current_pose, self.goal_pose, self.map)
         #raise NotImplementedError
 
     def start_cb(self, msg):
@@ -234,8 +234,10 @@ class PathPlan(Node):
 
         self.trajectory.points = path_coord
         # self.get_logger().info('Path %s' % path_coord)
-        self.traj_pub.publish(self.trajectory.toPoseArray())
-        self.trajectory.publish_viz()
+        path_to_shell = self.trajectory
+        return path_to_shell
+        # self.traj_pub.publish(self.trajectory.toPoseArray())
+        # self.trajectory.publish_viz()
 
 
     def generate_prm(self):
@@ -331,7 +333,7 @@ class PathPlan(Node):
         msg.is_bigendian = False
         msg.is_dense = True
 
-        self.graph_vis_pub.publish(msg)
+        # self.graph_vis_pub.publish(msg)
 
     def path_index_posearray(self, path):
         """ Takes the list of indices returned by A-star and turns it into a list of coordinates.
@@ -562,10 +564,11 @@ class PathPlan(Node):
         return pixel_x, pixel_y
 
 
-
-
-def main(args=None):
-    rclpy.init(args=args)
+if __name__ == "main":
     planner = PathPlan()
-    rclpy.spin(planner)
-    rclpy.shutdown()
+
+# def main(args=None):
+#     # rclpy.init(args=args)
+#     planner = PathPlan()
+    # rclpy.spin(planner)
+    # rclpy.shutdown()

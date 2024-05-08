@@ -2,11 +2,12 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 
-from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray
+from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 
 from .utils import LineTrajectory
+from .trajectory_planner_local import PathPlan
 
 class CityDrive(Node):
     '''
@@ -44,14 +45,33 @@ class CityDrive(Node):
 
         #### Given midline trajectory
         self.midline_subscriber = self.create_subscription(PoseArray, "/trajectory/current" , self.midline_cb, 1)
+        self.get_logger().info("Created midline sub")
         self.shell_sub = self.create_subscription(PoseArray, self.SHELL_TOPIC, self.shell_cb, 1)
+        self.get_logger().info("Created shell sub")
         self.wheelbase_length = .32*1.5
 
         self.trajectory = LineTrajectory(self, "followed_trajectory")
+        self.get_logger().info("Created trajectory traj class instance")
         self.offset = LineTrajectory(self, "offset_trajectory")
+        self.get_logger().info("Created offset traj class intsance")
         self.offset_publisher = self.create_publisher(PoseArray, "/offset_path", 10)
-    
-    #### 
+        self.get_logger().info("Created offset publisher")
+        self.planner = PathPlan(self)
+        self.get_logger().info("Created planner class instance")
+
+        self.map_sub = self.create_subscription(OccupancyGrid, self.planner.map_topic, self.planner.map_cb,1)
+        self.get_logger().info("Created map sub")
+        self.interp = LineTrajectory(self, "interp_trajectory")
+        self.get_logger().info("Created interp traj class instance")
+        self.interp_publisher = self.create_publisher(PoseArray, '/interpolated_path', 10)
+        self.get_logger().info("Created interp publisher")
+
+        self.offset_sub = self.create_subscription(PoseArray, "/offset_path", self.offset_cb, 1)
+        self.get_logger().info("Created offset subscriber")
+        self.offset_points = None
+        self.get_logger().info("Created offset points object None")
+
+
     def midline_cb(self, msg):
         """
         msg: PoseArray object representing points along a midline piecewise line segment.
@@ -63,14 +83,24 @@ class CityDrive(Node):
         if len(msg.poses) < 3:  # Requires at least three points to calculate angles
             self.get_logger().error("Received trajectory is too short to compute offset.")
             return
+        
+        # Interpolate the trajectory
+        interpolated_trajectory = self.interpolate_trajectory(msg)
+        self.get_logger().info(f"Interpolated trajectory with {len(interpolated_trajectory.poses)} points")
+
+        # Publishing the interpolated trajectory
+        self.interp_publisher.publish(interpolated_trajectory)
+        self.interp.fromPoseArray(interpolated_trajectory)
+        self.interp.publish_viz(offset=0.0)
+        self.get_logger().info("Published interp trajectory.")
 
         offset_points = []
-        side = 1.0  # -1.0 is left, 1.0 is right
+        side = -1.0  # -1.0 is left, 1.0 is right
 
-        for i in range(1, len(msg.poses) - 1):
-            p_prev = np.array([msg.poses[i - 1].position.x, msg.poses[i - 1].position.y])
-            p_curr = np.array([msg.poses[i].position.x, msg.poses[i].position.y])
-            p_next = np.array([msg.poses[i + 1].position.x, msg.poses[i + 1].position.y])
+        for i in range(1, len(interpolated_trajectory.poses) - 1):
+            p_prev = np.array([interpolated_trajectory.poses[i - 1].position.x, interpolated_trajectory.poses[i - 1].position.y])
+            p_curr = np.array([interpolated_trajectory.poses[i].position.x, interpolated_trajectory.poses[i].position.y])
+            p_next = np.array([interpolated_trajectory.poses[i + 1].position.x, interpolated_trajectory.poses[i + 1].position.y])
 
             # Calculate and normalize direction vectors
             v1 = p_curr - p_prev
@@ -98,21 +128,21 @@ class CityDrive(Node):
             offset_points.append(offset_point)
 
         # Add the first and last points with only the regular offset
-        first_point = np.array([msg.poses[0].position.x, msg.poses[0].position.y])
-        last_point = np.array([msg.poses[-1].position.x, msg.poses[-1].position.y])
-        first_direction = np.array([msg.poses[1].position.x, msg.poses[1].position.y]) - first_point
+        first_point = np.array([interpolated_trajectory.poses[0].position.x, interpolated_trajectory.poses[0].position.y])
+        last_point = np.array([interpolated_trajectory.poses[-1].position.x, interpolated_trajectory.poses[-1].position.y])
+        first_direction = np.array([interpolated_trajectory.poses[1].position.x, interpolated_trajectory.poses[1].position.y]) - first_point
         first_direction /= np.linalg.norm(first_direction)
         first_perpendicular = np.array([-first_direction[1], first_direction[0]])
         offset_points.insert(0, first_point + side * self.wheelbase_length * first_perpendicular)
 
-        last_direction = last_point - np.array([msg.poses[-2].position.x, msg.poses[-2].position.y])
+        last_direction = last_point - np.array([interpolated_trajectory.poses[-2].position.x, interpolated_trajectory.poses[-2].position.y])
         last_direction /= np.linalg.norm(last_direction)
         last_perpendicular = np.array([-last_direction[1], last_direction[0]])
         offset_points.append(last_point + side * self.wheelbase_length * last_perpendicular)
 
         # Creating a new PoseArray for the offset trajectory
         offset_pose_array = PoseArray()
-        offset_pose_array.header = msg.header
+        offset_pose_array.header = interpolated_trajectory.header
         for point in offset_points:
             pose = Pose()
             pose.position.x = point[0]
@@ -126,6 +156,66 @@ class CityDrive(Node):
         self.offset.publish_viz(offset=0.0)
         self.get_logger().info("Published offset trajectory.")
 
+    def interpolate_trajectory(self, pose_array, point_spacing=1.0):
+        """
+        Interpolates additional points between each pair of consecutive points in the provided PoseArray based on segment length.
+        
+        Args:
+            pose_array (PoseArray): The original PoseArray to interpolate.
+            point_spacing (float): Desired approximate spacing between interpolated points in meters.
+        
+        Returns:
+            PoseArray: A new PoseArray containing the original points and the interpolated points.
+        """
+        interpolated_poses = []
+
+        # Iterate over each segment
+        for i in range(len(pose_array.poses) - 1):
+            start_pose = pose_array.poses[i]
+            end_pose = pose_array.poses[i + 1]
+
+            # Start and end points
+            start_point = np.array([start_pose.position.x, start_pose.position.y])
+            end_point = np.array([end_pose.position.x, end_pose.position.y])
+
+            # Calculate segment length
+            segment_length = np.linalg.norm(end_point - start_point)
+
+            # Calculate the number of points to interpolate based on the segment length and point spacing
+            points_per_segment = max(int(segment_length / point_spacing), 1)  # Ensure at least one point
+
+            # Add the start pose of the segment
+            interpolated_poses.append(start_pose)
+
+            # Compute and add interpolated points
+            for j in range(1, points_per_segment):
+                t = j / points_per_segment
+                interpolated_point = (1 - t) * start_point + t * end_point
+                new_pose = Pose()
+                new_pose.position.x = interpolated_point[0]
+                new_pose.position.y = interpolated_point[1]
+                new_pose.orientation = start_pose.orientation  # Assuming no change in orientation
+                interpolated_poses.append(new_pose)
+
+        # Add the last pose of the original trajectory
+        interpolated_poses.append(pose_array.poses[-1])
+
+        # Create a new PoseArray with interpolated poses
+        new_pose_array = PoseArray()
+        new_pose_array.header = pose_array.header
+        new_pose_array.poses = interpolated_poses
+        return new_pose_array
+
+    def offset_cb(self,array:PoseArray):
+        """
+        Callback that receives the offset trajectory points.
+        """
+        if array.poses:
+            self.offset_points = array.poses
+            self.get_logger().info(f"Offset points received: {len(self.offset_points)} points")
+        else:
+            self.get_logger().warn("Received empty offset trajectory")
+        
     def shell_cb(self,msg):
         """
         Callback to process the shells placed by TAs and path plan them into
@@ -135,83 +225,99 @@ class CityDrive(Node):
             msg: (PoseArray) PoseArray object of the shell poses
         
         """
-        self.shell_points = self.pose_array_to_numpy(msg.poses)
+        self.shell_points = np.array(msg)
         ### insert path planning to each shell here 
-
+        self.shell_path = LineTrajectory(self, "shell_path")
         #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass
         ## first: extract points from /shell_points
         ## second: perform vectorized distance calculation with each one of the points to find closest point 'p' on
                 ## offsetted trajectory
-        for point in self.shell_points:
-            x_s = point[0]*np.ones(len(self.offset_traj_points))
-            y_s = point[1]*np.ones(len(self.offset_traj_points))
-            min_idx_to_shell = np.argmin((np.sqrt((self.offset_traj_points[:,0]-x_s)**2 + (self.offset_traj_points[:,1]-y_s)**2)))
-            min_pt = self.offset_traj_points[min_idx_to_shell]
-            ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
-            ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
+        self.get_logger().info("Shell callback initiated.")
+        self.get_logger().info(f"{self.offset_points}")
+        if self.offset_points is not None:
+            self.get_logger().info("Recieved offset trajectory.")
+            offset_traj = self.offset.toPoseArray() # full offset trajectory
+            # for all 3 shells
+            for index, point in enumerate(self.shell_points):
+                self.get_logger().info(f"Shell {index}")
+                # path planning
+                start_pt,end_pt = self.find_intersection_points(np.array(self.offset.points), point, 5.)
+                start_PS = self.numpy_to_PoseStamped(start_pt)
+                shell_PS = self.numpy_to_PoseStamped(point)
+                end_PS = self.numpy_to_PoseStamped(end_pt)
+                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.planner.map)
+                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.planner.map)
+
+                # pose arrays of trajectories
+                st_to_shPS = start_to_shell.toPoseArray() # start to shell
+                sh_to_ePS = shell_to_end.toPoseArray() # shell to end
+
+                # Find the start index in offset_traj
+                start_index = np.where(np.all(offset_traj == start_pt, axis=1))[0][0]
+                end_index = np.where(np.all(offset_traj == end_pt, axis=1))[0][0]
+
+                # Create a new PoseArray object for the shell path
+                new_pose_array = PoseArray()
+                new_pose_array.poses = []
+
+                # Append poses from offset_traj to the start index
+                new_pose_array.poses.extend(offset_traj.poses[:start_index])
+
+                # Append poses from start_to_shell
+                new_pose_array.poses.extend(st_to_shPS.poses)
+
+                # Append poses from shell_to_end
+                new_pose_array.poses.extend(sh_to_ePS.poses)
+
+                # Append poses from offset_traj from end index onwards
+                new_pose_array.poses.extend(offset_traj.poses[end_index:])
+
+                # Assign the new PoseArray object to shell_path
+                self.shell_path.fromPoseArray(new_pose_array)
+                self.shell_path.publish_viz(offset=0.0)
+                self.get_logger().info("Published shell trajectory.")
+                
+
+                ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
+                ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
         ## fourth: add each of these paths to the offsetted trajectory 
             #### store each iterated and new-created trajectory to a new final trajectory (possibly a merge function)
 
 
     ### HELPER FUNCTIONS ###
-    def pose_array_to_numpy(self,array:PoseArray):
+    # def pose_array_to_numpy(self,array:PoseArray):
+    #     """
+    #     Helper function that takes in a PoseArray and converts it into
+    #     a np.array of x,y coordinates.
+    #     """
+    #     points = np.zeros(len(array))
+    #     for idx,pose in enumerate(array.poses):
+    #         points[idx] = np.array([pose.position.x,pose.position.y])
+    #     return points
+    def find_intersection_points(self,trajectory_points:np.ndarray,circle_center:np.ndarray,radius:float):
         """
-        Helper function that takes in a PoseArray and converts it into
-        a np.array of x,y coordinates.
+        Function that will find the intersection points between a circle of size radius
+        around the shell.
         """
-        points = np.zeros(len(array))
-        for idx,pose in enumerate(array.poses):
-            points[idx] = np.array([pose.position.x,pose.position.y])
-        return points
-    
+        distances = np.sqrt((trajectory_points[:,0]-circle_center[0])**2 + (trajectory_points[:,1]-circle_center[1])**2)
+        intersection_mask = distances <= radius
+        intersection_pts = trajectory_points[intersection_mask]
+        start_pt = intersection_pts[0]
+        end_pt = intersection_pts[-1]
 
+        return (start_pt,end_pt)
 
-    # path planning functions from lab 6 to find optimal path to each shell from 
-    # closet point in offset trajectory
-    def plan_path(self, start_point, end_point, map):
+    def numpy_to_PoseStamped(self,array:np.ndarray):
         """
-        Plan a path from the start point to the end point on the given map graph.
-
-        Parameters:
-        start_point (PoseStamped): The start point in the map frame.
-        end_point (PoseStamped): The end point in the map frame.
-        map (OccupancyGrid): An instance of the nav_msgs/OccupancyGrid message,
-                              representing the map graph on which the path is to be planned.
-
-        Returns:
-        list: A list representing the planned path from the start point to the end point.
-              Each element in the list is a tuple containing the (x, y) coordinates of a point along the path.
-              Example: [(x1, y1), (x2, y2), ..., (xn, yn)]
-
-        Notes:
-        - The path planning process involves the following steps:
-          1. Sample random points in grid space.
-          2. Keep points that are viable.
-          3. Connect each viable point to all other points, creating edges.
-          4. Remove edges that intersect obstacles.
-          5. Run the A* search algorithm on the viable trajectories.
+        Helper function that turns an np.ndarray into a PoseStamped 
+        object.
         """
-        start_node = (start_point.pose.position.x, start_point.pose.position.y)
-        end_node = (end_point.position.x, end_point.position.y)
-
-         # Find nearest nodes to start and end in the graph
-        _, start_index = self.kd_tree.query(start_node)
-        _, end_index = self.kd_tree.query(end_node)
-
-        # Run A* on the graph
-        path = self.astar(self.graph, start_index, end_index) # outputs a list of indices for what node the path has
-
-        # Turn indices into their coordinates
-        path_coord = self.path_index_coord(path)
-
-        path_array = self.path_index_posearray(path)
-        # self.vis_path.publish(path_array)
-
-        self.trajectory.points = path_coord
-        # self.get_logger().info('Path %s' % path_coord)
-        self.traj_pub.publish(self.trajectory.toPoseArray())
-        self.trajectory.publish_viz()
-
+        pose = PoseStamped()
+        pose.header.frame_id = "map"
+        pose.pose.position.x = array[0]
+        pose.pose.position.y = array[1]
+        pose.pose.position.z = 0
+        return pose
     #### TAs pick three points
 
     #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass

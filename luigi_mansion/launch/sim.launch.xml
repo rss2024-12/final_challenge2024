@@ -1,10 +1,21 @@
 <!-- adding this loads specified trajectory into map-->
 <launch>
+    <node pkg="luigi_mansion" exec="city_drive" name="city_drive">
+        <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
+        <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
+    </node>
+    
     <node pkg="path_planning" exec="trajectory_loader" name="trajectory_loader">
         <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
-        <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/>
+        <param name="trajectory" value="$HOME/racecar_ws/src/final_challenge2024/luigi_mansion/lanes/lanes/full-lane.traj"/>
     </node>
-    <node pkg="luigi_mansion" exec="city_drive" name="city_drive">
+    
+    <!-- <node pkg="path_planning" exec="trajectory_follower" name="trajectory_follower"> -->
+        <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
+        <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
+    <!-- </node> -->
+    
+    <node pkg="luigi_mansion" exec="basement_point_pub" name="BasementPointPub">
         <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
         <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
     </node>
