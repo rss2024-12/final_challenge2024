@@ -15,6 +15,7 @@ setup(
         ('share/luigi_mansion/launch', glob.glob(os.path.join('launch', '*launch.*'))),
         (os.path.join('share', package_name, 'params', 'sim'), glob.glob('params/sim/*.yaml')),
         (os.path.join('share', package_name, 'params', 'real'), glob.glob('params/real/*.yaml')),
+        ('share/luigi_mansion/lanes', glob.glob(os.path.join('lanes', '*.traj'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,6 +29,8 @@ setup(
             'city_drive = luigi_mansion.city_drive_node:main',
             'stop_drive = luigi_mansion.stop_drive_node:main',
             'shell_drive = luigi_mansion.shell_drive_node:main'
+            'basement_point_pub = luigi_mansion.basement_point_publisher:main',
+            'stop_detector = luigi_mansion.stop_detector.stop_detector:main', 
         ],
     },
 )
