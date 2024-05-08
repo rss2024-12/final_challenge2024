@@ -2,6 +2,10 @@
 <launch>
     <node pkg="path_planning" exec="trajectory_loader" name="trajectory_loader">
         <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
-        <param name="trajectory" value="$(find-pkg-share path_planning)/example_trajectories/trajectory_2.traj"/>
+        <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/>
+    </node>
+    <node pkg="luigi_mansion" exec="city_drive" name="city_drive">
+        <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
+        <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
     </node>
 </launch>
