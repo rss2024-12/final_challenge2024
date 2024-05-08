@@ -8,4 +8,8 @@
         <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
         <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
     </node>
+    <node pkg="luigi_mansion" exec="basement_point_pub" name="BasementPointPub">
+        <!--        <param name="trajectory" value="$HOME/lab6_trajectories/example.traj"/>-->
+        <!-- <param name="trajectory" value="$(find-pkg-share luigi_mansion)/lanes/full-lane.traj"/> -->
+    </node>
 </launch>
