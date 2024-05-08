@@ -65,7 +65,7 @@ class CityDrive(Node):
             return
 
         offset_points = []
-        side = -1.0  # -1.0 is left, 1.0 is right
+        side = 1.0  # -1.0 is left, 1.0 is right
 
         for i in range(1, len(msg.poses) - 1):
             p_prev = np.array([msg.poses[i - 1].position.x, msg.poses[i - 1].position.y])
@@ -89,7 +89,7 @@ class CityDrive(Node):
             # Check if the angle is close to 90 degrees
             if np.abs(angle_cos) < 0.3:
                 # Apply additional shift in the direction of the segment
-                additional_shift = v1 * self.wheelbase_length
+                additional_shift = v1 * -side * self.wheelbase_length
             else:
                 additional_shift = np.array([0, 0])
 
