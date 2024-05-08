@@ -10,7 +10,7 @@ from .utils import LineTrajectory
 
 class CityDrive(Node):
     '''
-    ROS2 Node in charge of taking the trajectories to create a path and drive commands
+    ROS2 Node in charge of taking the midline trajectory to create a path and drive commands
     '''
 
     def __init__(self):
@@ -20,6 +20,7 @@ class CityDrive(Node):
         self.declare_parameter('drive_topic', 'default')
         self.declare_parameter('odom_topic', 'default')
         self.declare_parameter('path_topic', 'default')
+        self.declare_parameter('shell_topic','default')
 
         # TODO: Change topics when complete
         # self.DRIVE_TOPIC = self.get_parameter('drive_topic').get_parameter_value().string_value
@@ -28,6 +29,8 @@ class CityDrive(Node):
         self.ODOM_TOPIC = "/odom"
         # self.DRIVE_TOPIC = self.get_parameter('drive_topic').get_parameter_value().string_value
         self.PATH_TOPIC = "/path"
+        # self.SHELL_TOPIC = self.get_parameter('shell_topic').get_parameter_value().string_value
+        self.SHELL_TOPIC = "/shell_points"
 
         self.publisher = self.create_publisher(AckermannDriveStamped, self.DRIVE_TOPIC, 10)
         #self.subscriber = self.create_subscription(Odometry, self.ODOM_TOPIC, self.odom_cb, 1)
@@ -35,17 +38,20 @@ class CityDrive(Node):
         self.get_logger().info("==================== READY ====================")
 
         self.path = None
+        self.shell_points = None
 
-        self.get_logger().info("Point Publisher Initialized")
+        self.get_logger().info("City Drive Node Initialized")
 
         #### Given midline trajectory
         self.midline_subscriber = self.create_subscription(PoseArray, "/trajectory/current" , self.midline_cb, 1)
+        self.shell_sub = self.create_subscription(PoseArray, self.SHELL_TOPIC, self.shell_cb, 1)
         self.wheelbase_length = .32*1.5
 
         self.trajectory = LineTrajectory(self, "followed_trajectory")
         self.offset = LineTrajectory(self, "offset_trajectory")
         self.offset_publisher = self.create_publisher(PoseArray, "/offset_path", 10)
-
+    
+    #### 
     def midline_cb(self, msg):
         """
         msg: PoseArray object representing points along a midline piecewise line segment.
@@ -120,7 +126,91 @@ class CityDrive(Node):
         self.offset.publish_viz(offset=0.0)
         self.get_logger().info("Published offset trajectory.")
 
+    def shell_cb(self,msg):
+        """
+        Callback to process the shells placed by TAs and path plan them into
+        the offsetted trajectory. Will directly modify offsetted trajectory object.
 
+        Args:
+            msg: (PoseArray) PoseArray object of the shell poses
+        
+        """
+        self.shell_points = self.pose_array_to_numpy(msg.poses)
+        ### insert path planning to each shell here 
+
+        #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass
+        ## first: extract points from /shell_points
+        ## second: perform vectorized distance calculation with each one of the points to find closest point 'p' on
+                ## offsetted trajectory
+        for point in self.shell_points:
+            x_s = point[0]*np.ones(len(self.offset_traj_points))
+            y_s = point[1]*np.ones(len(self.offset_traj_points))
+            min_idx_to_shell = np.argmin((np.sqrt((self.offset_traj_points[:,0]-x_s)**2 + (self.offset_traj_points[:,1]-y_s)**2)))
+            min_pt = self.offset_traj_points[min_idx_to_shell]
+            ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
+            ## will have to somehow do a local path plan to do this, maybe even better to do it on a smaller region of the map if possible
+        ## fourth: add each of these paths to the offsetted trajectory 
+            #### store each iterated and new-created trajectory to a new final trajectory (possibly a merge function)
+
+
+    ### HELPER FUNCTIONS ###
+    def pose_array_to_numpy(self,array:PoseArray):
+        """
+        Helper function that takes in a PoseArray and converts it into
+        a np.array of x,y coordinates.
+        """
+        points = np.zeros(len(array))
+        for idx,pose in enumerate(array.poses):
+            points[idx] = np.array([pose.position.x,pose.position.y])
+        return points
+    
+
+
+    # path planning functions from lab 6 to find optimal path to each shell from 
+    # closet point in offset trajectory
+    def plan_path(self, start_point, end_point, map):
+        """
+        Plan a path from the start point to the end point on the given map graph.
+
+        Parameters:
+        start_point (PoseStamped): The start point in the map frame.
+        end_point (PoseStamped): The end point in the map frame.
+        map (OccupancyGrid): An instance of the nav_msgs/OccupancyGrid message,
+                              representing the map graph on which the path is to be planned.
+
+        Returns:
+        list: A list representing the planned path from the start point to the end point.
+              Each element in the list is a tuple containing the (x, y) coordinates of a point along the path.
+              Example: [(x1, y1), (x2, y2), ..., (xn, yn)]
+
+        Notes:
+        - The path planning process involves the following steps:
+          1. Sample random points in grid space.
+          2. Keep points that are viable.
+          3. Connect each viable point to all other points, creating edges.
+          4. Remove edges that intersect obstacles.
+          5. Run the A* search algorithm on the viable trajectories.
+        """
+        start_node = (start_point.pose.position.x, start_point.pose.position.y)
+        end_node = (end_point.position.x, end_point.position.y)
+
+         # Find nearest nodes to start and end in the graph
+        _, start_index = self.kd_tree.query(start_node)
+        _, end_index = self.kd_tree.query(end_node)
+
+        # Run A* on the graph
+        path = self.astar(self.graph, start_index, end_index) # outputs a list of indices for what node the path has
+
+        # Turn indices into their coordinates
+        path_coord = self.path_index_coord(path)
+
+        path_array = self.path_index_posearray(path)
+        # self.vis_path.publish(path_array)
+
+        self.trajectory.points = path_coord
+        # self.get_logger().info('Path %s' % path_coord)
+        self.traj_pub.publish(self.trajectory.toPoseArray())
+        self.trajectory.publish_viz()
 
     #### TAs pick three points
 
