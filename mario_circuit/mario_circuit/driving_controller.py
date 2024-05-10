@@ -34,9 +34,9 @@ class DrivingController(Node):
         self.relative_x = 0
         self.relative_y = 0
         self.previous_delta = None
-        self.angle_step = 1/120
+        self.angle_step = 1/100
         self.max_angle = 0.05
-        self.correction_factor = 0.0175
+        self.correction_factor = 0.019
         self.get_logger().info("Driving Controller Initialized")
 
     def relative_line_callback(self, msg):
