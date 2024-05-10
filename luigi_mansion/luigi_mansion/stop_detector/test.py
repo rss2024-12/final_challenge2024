@@ -11,8 +11,8 @@ def detect_and_draw_line(image_path):
     hsv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
 
     # Define lower and upper bounds for the line color in HSV
-    lower_bound = np.array([0, 160, 160])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
-    upper_bound = np.array([20, 255, 255])  # Upper bound for white in HSV
+    lower_bound = np.array([0, 150, 200])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
+    upper_bound = np.array([10, 255, 255])  # Upper bound for white in HSV
     
     # Ignore the top half of the image
     height,width = cv_img.shape[:2]
@@ -37,7 +37,9 @@ def detect_and_draw_line(image_path):
     
     # Iterate through contours and find the bounding box of the largest contour
     if len(contours) > 0:
+        
         largest_contour = max(contours, key=cv2.contourArea)
+        print(largest_contour)
         x, y, w, h = cv2.boundingRect(largest_contour)
         box = ((x, y), (x + w, y + h))
     

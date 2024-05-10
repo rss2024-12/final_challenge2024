@@ -6,6 +6,8 @@ import cv2
 from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
+from cs_msgs import LineLocationPixel
+from ackermann_msgs.msg import AckermannDriveStamped
 
 class StopLightDetector(Node):
     """
@@ -13,6 +15,8 @@ class StopLightDetector(Node):
     Subscribes to: /zed/zed_node/rgb/image_rect_color (Image) : the live RGB image from the onboard ZED camera.
     Publishes to: /relative_line_px (ConeLocationPixel) : the coordinates of the line in the image frame (units are pixels).
     The reason its a ConeLocationPixel is because I did not want to change other code
+    
+    Publish drive command to /vesc/high_level/input/nav_1
     """
     def __init__(self):
         super().__init__("stoplight_detector")
@@ -28,6 +32,8 @@ class StopLightDetector(Node):
         self.get_logger().info("StopLight Detector Initialized")
         self.debug_image = self.create_publisher(Image, "/debug")
 
+        ###Need to update for params file
+        self.drive_pub = self.create_publisher(AckermannDriveStamped, "/vesc/high_level/input/nav_1", self.image_callback,10)
 
 
     
@@ -42,8 +48,8 @@ class StopLightDetector(Node):
         hsv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
     
         # Define lower and upper bounds for the line color in HSV
-        lower_bound = np.array([170, 100, 100])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
-        upper_bound = np.array([10, 255, 255])  # Upper bound for white in HSV
+        lower_bound = np.array([0, 150, 200])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
+        upper_bound = np.array([10, 255, 255])
        
         # Ignore the top half of the image
         height = image_msg.height
@@ -69,11 +75,15 @@ class StopLightDetector(Node):
             box = ((x, y), (x + w, y + h))
        
         x=(box[0][0]+box[1][0])//2 #takes the middle 
-        y=(box[1][0]+box[1][1])//2#grabs the point on the bottom of the bounding box
-        pixel = ConeLocationPixel()
+        y=(box[1][0]+box[1][1])//2#takes the midle
+        pixel = LineLocationPixel()
         pixel.u = float(x)
         pixel.v = float(y)
-        self.stoplight_pub.publish(pixel)
+        
+        if box != ((0, 0), (0, 0))
+            drive_msg = AckermannDriveStamped()
+            drive_msg.speed = 0.0
+            self.drive_pub.publish(drive_msg)
 
 
 
