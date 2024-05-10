@@ -40,6 +40,7 @@ class CityDrive(Node):
 
         self.path = None
         self.shell_points = None
+        self.map = None
 
         self.get_logger().info("City Drive Node Initialized")
 
@@ -59,7 +60,7 @@ class CityDrive(Node):
         self.planner = PathPlan(self)
         self.get_logger().info("Created planner class instance")
 
-        self.map_sub = self.create_subscription(OccupancyGrid, self.planner.map_topic, self.planner.map_cb,1)
+        self.map_sub = self.create_subscription(OccupancyGrid, "/map", self.planner.map_cb,1)
         self.get_logger().info("Created map sub")
         self.interp = LineTrajectory(self, "interp_trajectory")
         self.get_logger().info("Created interp traj class instance")
@@ -225,57 +226,82 @@ class CityDrive(Node):
             msg: (PoseArray) PoseArray object of the shell poses
         
         """
-        self.shell_points = np.array(msg)
+        self.get_logger().info("Shell callback initiated.")
+        #self.get_logger().info(f"{msg=}")
+        self.shell_points = np.array(msg.poses)
+        # self.get_logger().info(f"{self.shell_points=}")
         ### insert path planning to each shell here 
         self.shell_path = LineTrajectory(self, "shell_path")
         #### iterate through each point on the trajectory, finding the closest one to goal (shell) *make sure not to pass
         ## first: extract points from /shell_points
         ## second: perform vectorized distance calculation with each one of the points to find closest point 'p' on
                 ## offsetted trajectory
-        self.get_logger().info("Shell callback initiated.")
-        self.get_logger().info(f"{self.offset_points}")
         if self.offset_points is not None:
             self.get_logger().info("Recieved offset trajectory.")
             offset_traj = self.offset.toPoseArray() # full offset trajectory
+
+
             # for all 3 shells
+            # Create a new PoseArray object for the shell path
+            final_pose_array = PoseArray()
+            final_pose_array.header = offset_traj.header
+            final_pose_array.poses = offset_traj.poses[:]
+
             for index, point in enumerate(self.shell_points):
-                self.get_logger().info(f"Shell {index}")
-                # path planning
-                start_pt,end_pt = self.find_intersection_points(np.array(self.offset.points), point, 5.)
+                self.get_logger().info(f"Shell {index+1}")
+
+                # obtain points of intersection
+                start_pt,end_pt = self.find_intersection_points(offset_traj, point, 5.)
+                #self.get_logger().info(f"{start_pt=}, {end_pt=}")
                 start_PS = self.numpy_to_PoseStamped(start_pt)
-                shell_PS = self.numpy_to_PoseStamped(point)
+                #self.get_logger().info(f"{start_PS=}")
+                shell_PS = self.numpy_to_PoseStamped(np.array([point.position.x,point.position.y]))
+                #self.get_logger().info(f"{shell_PS=}")
                 end_PS = self.numpy_to_PoseStamped(end_pt)
-                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.planner.map)
-                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.planner.map)
+                #self.get_logger().info(f"{end_PS=}")
+
+                # plan paths
+                # self.get_logger().info(f"{self.map=}")
+                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.map)
+                self.get_logger().info("STS path plan success")
+                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.map)
+                self.get_logger().info("STE path plan success")
 
                 # pose arrays of trajectories
                 st_to_shPS = start_to_shell.toPoseArray() # start to shell
                 sh_to_ePS = shell_to_end.toPoseArray() # shell to end
 
                 # Find the start index in offset_traj
-                start_index = np.where(np.all(offset_traj == start_pt, axis=1))[0][0]
-                end_index = np.where(np.all(offset_traj == end_pt, axis=1))[0][0]
+                numpy_final_poses = self.pose_array_to_numpy(final_pose_array)
+                self.get_logger().info(f"{numpy_final_poses=}")
+                start_index = np.where(np.all(numpy_final_poses == start_pt, axis=1))[0][0]
+                end_index = np.where(np.all(numpy_final_poses == end_pt, axis=1))[0][0]
 
-                # Create a new PoseArray object for the shell path
-                new_pose_array = PoseArray()
-                new_pose_array.poses = []
+                # Create a new temporary PoseArray to merge changes
+                temp_pose_array = PoseArray()
+                temp_pose_array.poses = []
 
                 # Append poses from offset_traj to the start index
-                new_pose_array.poses.extend(offset_traj.poses[:start_index])
+                temp_pose_array.poses.extend(final_pose_array.poses[:start_index])
 
                 # Append poses from start_to_shell
-                new_pose_array.poses.extend(st_to_shPS.poses)
+                temp_pose_array.poses.extend(st_to_shPS.poses)
 
                 # Append poses from shell_to_end
-                new_pose_array.poses.extend(sh_to_ePS.poses)
+                temp_pose_array.poses.extend(sh_to_ePS.poses)
 
                 # Append poses from offset_traj from end index onwards
-                new_pose_array.poses.extend(offset_traj.poses[end_index:])
+                temp_pose_array.poses.extend(final_pose_array.poses[end_index:])
 
-                # Assign the new PoseArray object to shell_path
-                self.shell_path.fromPoseArray(new_pose_array)
-                self.shell_path.publish_viz(offset=0.0)
-                self.get_logger().info("Published shell trajectory.")
+                self.get_logger().info(f"Shell {index+1} Trajectory calculated.")
+
+                final_pose_array.poses = temp_pose_array.poses
+
+
+            # Assign the new PoseArray object to shell_path
+            self.shell_path.fromPoseArray(final_pose_array)
+            self.shell_path.publish_viz(offset=0.0)
+            self.get_logger().info("Published combined shell trajectory.")
                 
 
                 ## third: once closest points found, somehow call path plan on each pair of start_point 'p' and shell 's_x', x=1,2,3.
@@ -285,23 +311,28 @@ class CityDrive(Node):
 
 
     ### HELPER FUNCTIONS ###
-    # def pose_array_to_numpy(self,array:PoseArray):
-    #     """
-    #     Helper function that takes in a PoseArray and converts it into
-    #     a np.array of x,y coordinates.
-    #     """
-    #     points = np.zeros(len(array))
-    #     for idx,pose in enumerate(array.poses):
-    #         points[idx] = np.array([pose.position.x,pose.position.y])
-    #     return points
-    def find_intersection_points(self,trajectory_points:np.ndarray,circle_center:np.ndarray,radius:float):
+    def pose_array_to_numpy(self,array:PoseArray):
+        """
+        Helper function that takes in a PoseArray and converts it into
+        a np.array of x,y coordinates.
+        """
+        points = np.zeros((len(array.poses), 2))
+        for idx, pose in enumerate(array.poses):
+            # Assign x and y coordinates directly to the row
+            points[idx] = [pose.position.x, pose.position.y]
+        return points
+        
+    def find_intersection_points(self,trajectory_points, circle_center, radius:float):
         """
         Function that will find the intersection points between a circle of size radius
         around the shell.
         """
-        distances = np.sqrt((trajectory_points[:,0]-circle_center[0])**2 + (trajectory_points[:,1]-circle_center[1])**2)
+        traj_points_np = self.pose_array_to_numpy(trajectory_points)
+        circle_center_np = np.array([circle_center.position.x,circle_center.position.y])
+
+        distances = np.sqrt((traj_points_np[:,0]-circle_center_np[0])**2 + (traj_points_np[:,1]-circle_center_np[1])**2)
         intersection_mask = distances <= radius
-        intersection_pts = trajectory_points[intersection_mask]
+        intersection_pts = traj_points_np[intersection_mask]
         start_pt = intersection_pts[0]
         end_pt = intersection_pts[-1]
 
@@ -316,7 +347,7 @@ class CityDrive(Node):
         pose.header.frame_id = "map"
         pose.pose.position.x = array[0]
         pose.pose.position.y = array[1]
-        pose.pose.position.z = 0
+        pose.pose.position.z = 0.
         return pose
     #### TAs pick three points
 

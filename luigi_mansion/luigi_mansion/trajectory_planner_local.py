@@ -47,11 +47,11 @@ class PathPlan():
 
         # SUBSCRIPTIONS
         # Gets called when the map is received
-        # self.map_sub = node.create_subscription(
-        #     OccupancyGrid,
-        #     self.map_topic,
-        #     self.map_cb,
-        #     1)
+        self.map_sub = node.create_subscription(
+            OccupancyGrid,
+            self.map_topic,
+            self.map_cb,
+            1)
 
         # Gets called when the goal is received
         # self.goal_sub = node.create_subscription(
@@ -93,11 +93,11 @@ class PathPlan():
         # )
 
         # Used to visualize the nodes of the PRM graph
-        # self.graph_vis_pub = node.create_publisher(
-        #     PointCloud2,
-        #     "/graph_points",
-        #     10
-        # )
+        self.graph_vis_pub = self.node.create_publisher(
+            PointCloud2,
+            "/graph_points",
+            10
+        )
 
         # Publisher for testing pixel_to_map_coordinate method
         # self.test_pub = node.create_publisher(
@@ -138,6 +138,7 @@ class PathPlan():
 
     ### CALLBACKS START ###
     def map_cb(self, msg):
+        self.node.get_logger().info("Map callback initiated.")
         #of the form of occupancy grid. Should just store the map I think
         ###pre process the map, map is only received once
         ## need to dilate and erode (absolutely necessary), see README
@@ -154,7 +155,7 @@ class PathPlan():
         dilated_occupancy_grid_msg = msg
         dilated_occupancy_grid_msg.data = dilated_image.flatten().tolist()
 
-        self.map = dilated_occupancy_grid_msg
+        self.node.map = dilated_occupancy_grid_msg
 
         self.node.get_logger().info('Generating')
         self.generate_prm()
@@ -217,7 +218,8 @@ class PathPlan():
           5. Run the A* search algorithm on the viable trajectories.
         """
         start_node = (start_point.pose.position.x, start_point.pose.position.y)
-        end_node = (end_point.position.x, end_point.position.y)
+        end_node = (end_point.pose.position.x, end_point.pose.position.y)
+
 
          # Find nearest nodes to start and end in the graph
         _, start_index = self.kd_tree.query(start_node)
@@ -264,17 +266,17 @@ class PathPlan():
         while num_samples < self.num_samples:
             # Sample a random point
             rand_x = random.uniform(0, 1)
-            scale_rand_x = rand_x * self.map.info.width
+            scale_rand_x = rand_x * self.node.map.info.width
             pixel_x = math.floor(scale_rand_x)
 
             rand_y = random.uniform(0, 1)
-            scale_rand_y = rand_y * self.map.info.height
+            scale_rand_y = rand_y * self.node.map.info.height
             pixel_y = math.floor(scale_rand_y)
             
             random_x, random_y = self.pixels_to_map_coordinates(pixel_x, pixel_y)
 
             # Check validity of the sampled point
-            if self.map.data[pixel_y * self.map.info.width + pixel_x] < self.obstacle_threshold: #error probable here
+            if self.node.map.data[pixel_y * self.node.map.info.width + pixel_x] < self.obstacle_threshold: #error probable here
                 self.valid_points.append((random_x, random_y))
             num_samples += 1
        # Step 2: Connect each valid point to all other valid points within a certain radius
@@ -291,7 +293,7 @@ class PathPlan():
                             y = (1 - t) * point1[1] + t * point2[1]
                             pixel_x, pixel_y = self.map_coordinates_to_pixels(x, y)
 
-                            if self.map.data[pixel_y * self.map.info.width + pixel_x] >= self.obstacle_threshold:
+                            if self.node.map.data[pixel_y * self.node.map.info.width + pixel_x] >= self.obstacle_threshold:
                                 edge_valid = False
                                 break
                         if edge_valid:
@@ -310,7 +312,7 @@ class PathPlan():
         # Set the header
         msg.header = Header()
         msg.header.frame_id = 'map'
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
 
         # Set the fields (x, y, z coordinates)
         msg.fields.append(PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1))
@@ -333,7 +335,7 @@ class PathPlan():
         msg.is_bigendian = False
         msg.is_dense = True
 
-        # self.graph_vis_pub.publish(msg)
+        self.graph_vis_pub.publish(msg)
 
     def path_index_posearray(self, path):
         """ Takes the list of indices returned by A-star and turns it into a list of coordinates.
@@ -353,7 +355,7 @@ class PathPlan():
 
         path_array = PoseArray()
         path_array.header = Header()
-        path_array.header.stamp = self.get_clock().now().to_msg()
+        path_array.header.stamp = self.node.get_clock().now().to_msg()
         path_array.header.frame_id = 'map'
         path_array.poses = path_coord
         
@@ -504,16 +506,16 @@ class PathPlan():
     
         """
 
-        map_resolution = self.map.info.resolution
-        map_origin_x = self.map.info.origin.position.x
-        map_origin_y = self.map.info.origin.position.y
+        map_resolution = self.node.map.info.resolution
+        map_origin_x = self.node.map.info.origin.position.x
+        map_origin_y = self.node.map.info.origin.position.y
 
         # Convert orientation quaternion to Euler angles
         orientation_quaternion = (
-        self.map.info.origin.orientation.x,
-        self.map.info.origin.orientation.y,
-        self.map.info.origin.orientation.z,
-        self.map.info.origin.orientation.w
+        self.node.map.info.origin.orientation.x,
+        self.node.map.info.origin.orientation.y,
+        self.node.map.info.origin.orientation.z,
+        self.node.map.info.origin.orientation.w
         )
         roll, pitch, yaw = euler_from_quaternion(orientation_quaternion)
 
@@ -544,10 +546,10 @@ class PathPlan():
                - pixel_x (int): Pixel column index in the occupancy grid.
                - pixel_y (int): Pixel row index in the occupancy grid.
         """
-        map_resolution = self.map.info.resolution
-        map_origin_x = self.map.info.origin.position.x
-        map_origin_y = self.map.info.origin.position.y
-        map_orientation = self.map.info.origin.orientation
+        map_resolution = self.node.map.info.resolution
+        map_origin_x = self.node.map.info.origin.position.x
+        map_origin_y = self.node.map.info.origin.position.y
+        map_orientation = self.node.map.info.origin.orientation
 
         # Convert Quaternion to Euler angles (roll, pitch, yaw)
         quaternion = (map_orientation.x, map_orientation.y, map_orientation.z, map_orientation.w)#
