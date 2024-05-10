@@ -56,7 +56,8 @@ class StopLightDetector(Node):
         width = image_msg.width
         #self.get_logger().info(f'Height:{height}')
         top_mask = np.zeros_like(hsv_img[:, :, 0])
-        top_mask[height//2:, :] = 255
+        top_mask[height*1.25//4:, :] = 255
+        top_mask[:height*1.75//4:,:] = 255
         
 
         # Threshold the HSV image to get a binary mask, combine with top half mask
