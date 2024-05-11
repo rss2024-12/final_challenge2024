@@ -4,7 +4,9 @@ luigi_mansion:
     map_topic: "/map"
     scan_topic: "/scan"
     odom_topic: "/odom"	
-    drive_topic: "/drive"
+    drive_topic: "/vesc/high_level/input/nav_1"
+    speed: 1.0
+    detector_drive_topic: "/vesc/high_level/input/nav_0"
 
     # The frame you should publish your transform to
     particle_filter_frame: "/base_link_pf"

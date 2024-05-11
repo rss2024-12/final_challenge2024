@@ -1,0 +1,11 @@
+luigi_mansion:
+  ros_parameters:
+    drive_topic: "/vesc/high_level/input/nav_1"
+    detector_drive_topic: "/vesc/high_level/input/nav_0"
+    map: "/map"
+    odom_topic: "/vesc/odom"
+    speed: 4.0
+    scan_topic: "/scan"
+    camera: "/zed/zed_node/rgb/image_rect_color"
+    path_topic: "/path"
+    shell_topic: "/shell_points"
