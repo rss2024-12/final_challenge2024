@@ -18,17 +18,19 @@ class CityDrive(Node):
         super().__init__("city_drive")
         #self.publisher = self.create_publisher(PoseArray, "/shell_points", 1)
         #self.subscriber = self.create_subscription(PointStamped, "/clicked_point", self.callback, 1)
-        self.declare_parameter('drive_topic', 'default')
-        self.declare_parameter('odom_topic', 'default')
-        self.declare_parameter('path_topic', 'default')
-        self.declare_parameter('shell_topic','default')
+        # self.declare_parameter('drive_topic', 'default')
+        # self.declare_parameter('odom_topic', 'default')
+        # self.declare_parameter('path_topic', 'default')
+        # self.declare_parameter('shell_topic','default')
 
         # TODO: Change topics when complete
         # self.DRIVE_TOPIC = self.get_parameter('drive_topic').get_parameter_value().string_value
-        self.DRIVE_TOPIC = "/drive"
-        # self.DRIVE_TOPIC = self.get_parameter('odom_topic').get_parameter_value().string_value
-        self.ODOM_TOPIC = "/odom"
-        # self.DRIVE_TOPIC = self.get_parameter('drive_topic').get_parameter_value().string_value
+        # self.DRIVE_TOPIC = "/drive"
+        self.DRIVE_TOPIC = "/vesc/high_level/input/nav_1"
+        # self.ODOM_TOPIC = self.get_parameter('odom_topic').get_parameter_value().string_value
+        # self.ODOM_TOPIC = "/odom"
+        self.ODOM_TOPIC = "/vesc/odom"
+        # self.PATH_TOPIC = self.get_parameter('drive_topic').get_parameter_value().string_value
         self.PATH_TOPIC = "/path"
         # self.SHELL_TOPIC = self.get_parameter('shell_topic').get_parameter_value().string_value
         self.SHELL_TOPIC = "/shell_points"
