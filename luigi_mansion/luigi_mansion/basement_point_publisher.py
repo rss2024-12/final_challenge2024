@@ -24,7 +24,7 @@ class BasementPointPublisher(Node):
         self.get_logger().info(f"Received point: {x}, {y}")
         self.array.append(Pose(position=Point(x=x, y=y, z=0.0)))
         
-        if len(self.array) == 1: # originally 3
+        if len(self.array) == 3: # originally 3
             self.publish()
 
     def publish(self):

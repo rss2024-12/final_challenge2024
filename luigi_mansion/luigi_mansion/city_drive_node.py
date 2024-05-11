@@ -2,6 +2,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 
+from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point, PointStamped, Pose, PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry, OccupancyGrid
@@ -67,12 +68,16 @@ class CityDrive(Node):
         self.interp = LineTrajectory(self, "interp_trajectory")
         self.get_logger().info("Created interp traj class instance")
         self.interp_publisher = self.create_publisher(PoseArray, '/interpolated_path', 10)
-        self.get_logger().info("Created interp publisher")
+        
 
         self.offset_sub = self.create_subscription(PoseArray, "/offset_path", self.offset_cb, 1)
         self.get_logger().info("Created offset subscriber")
         self.offset_points = None
         self.get_logger().info("Created offset points object None")
+
+        self.marker_pub = self.create_publisher(Marker, '/visualization_marker', 10)
+        self.get_logger().info("Created point publisher")
+
 
 
     def midline_cb(self, msg):
@@ -218,7 +223,29 @@ class CityDrive(Node):
             self.get_logger().info(f"Offset points received: {len(self.offset_points)} points")
         else:
             self.get_logger().warn("Received empty offset trajectory")
-        
+    
+    def create_marker(self, point, marker_id, color=(1.0, 0.0, 0.0)):
+        """Create a marker for visualization in RViz."""
+        marker = Marker()
+        marker.header.frame_id = "map"  # Set the relevant coordinate frame
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = "shell_path"
+        marker.id = marker_id
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = point[0]
+        marker.pose.position.y = point[1]
+        marker.pose.position.z = 0.0  # Adjust as needed for the z-axis
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.2  # Marker size on the x-axis
+        marker.scale.y = 0.2  # Marker size on the y-axis
+        marker.scale.z = 0.2  # Marker size on the z-axis
+        marker.color.a = 1.0  # Alpha (opacity)
+        marker.color.r = color[0]
+        marker.color.g = color[1]
+        marker.color.b = color[2]
+        return marker
+
     def shell_cb(self,msg):
         """
         Callback to process the shells placed by TAs and path plan them into
@@ -254,6 +281,12 @@ class CityDrive(Node):
 
                 # obtain points of intersection
                 start_pt,end_pt = self.find_intersection_points(offset_traj, point, 5.)
+
+                # # Publish start point marker
+                # start_marker = self.create_marker(start_pt, marker_id=1, color=(0.0, 1.0, 1.0))
+                # self.marker_pub.publish(start_marker)
+                # self.get_logger().info("Published marker for start point.")
+
                 #self.get_logger().info(f"{start_pt=}, {end_pt=}")
                 start_PS = self.numpy_to_PoseStamped(start_pt)
                 #self.get_logger().info(f"{start_PS=}")
@@ -264,14 +297,10 @@ class CityDrive(Node):
 
                 # plan paths
                 # self.get_logger().info(f"{self.map=}")
-                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.map)
+                start_to_shell = self.planner.plan_path(start_PS, shell_PS, self.map).toPoseArray()
                 self.get_logger().info("STS path plan success")
-                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.map)
+                shell_to_end = self.planner.plan_path(shell_PS, end_PS, self.map).toPoseArray()
                 self.get_logger().info("STE path plan success")
-
-                # pose arrays of trajectories
-                st_to_shPS = start_to_shell.toPoseArray() # start to shell
-                sh_to_ePS = shell_to_end.toPoseArray() # shell to end
 
                 # Find the start index in offset_traj
                 numpy_final_poses = self.pose_array_to_numpy(final_pose_array)
@@ -287,13 +316,13 @@ class CityDrive(Node):
                 temp_pose_array.poses.extend(final_pose_array.poses[:start_index])
 
                 # Append poses from start_to_shell
-                temp_pose_array.poses.extend(st_to_shPS.poses)
+                temp_pose_array.poses.extend(start_to_shell.poses)
 
                 # Append poses from shell_to_end
-                temp_pose_array.poses.extend(sh_to_ePS.poses)
+                temp_pose_array.poses.extend(shell_to_end.poses)
 
                 # Append poses from offset_traj from end index onwards
-                temp_pose_array.poses.extend(final_pose_array.poses[end_index:])
+                temp_pose_array.poses.extend(final_pose_array.poses[end_index+1:])
 
                 self.get_logger().info(f"Shell {index+1} Trajectory calculated.")
 

@@ -132,7 +132,7 @@ class PathPlan():
 
         ### Important variables for PRM
         self.obstacle_threshold = 50  # all map values are 0 or 100
-        self.num_samples = 10000  # Adjust as needed
+        self.num_samples = 20000  # Adjust as needed
         self.connect_radius = 5.0  # gives distance maximum distance of a "neighbor"
         self.graph = []
 
@@ -144,7 +144,24 @@ class PathPlan():
         ## need to dilate and erode (absolutely necessary), see README
         radius = 10  # 10 px radius
         occupancy_data = np.array(msg.data, dtype=np.uint8).reshape((msg.info.height, msg.info.width))
+        self.node.get_logger().info(f"{msg.info.height=}, {msg.info.width=}")
         # occupancy_image = cv2.flip(occupancy_data, 0)  # Flip the image vertically to match the ROS convention
+
+        # Crop the first crop pixels of the height
+        crop_y = 350
+        if msg.info.height > crop_y:
+            # Crop the first crop_y rows and first crop_x columns
+            cropped_occupancy_data = occupancy_data[crop_y:, :]
+
+            # Update the map info height and width
+            new_height = msg.info.height - crop_y
+            msg.info.height = new_height
+
+            # Convert the cropped data back to a list and ensure it is in the correct int8 format
+            cropped_data_flattened = cropped_occupancy_data.astype(np.int8).flatten().tolist()
+            msg.data = cropped_data_flattened
+        else:
+            self.node.get_logger().warning("Crop dimensions invalid.")
 
 
         occupancy_image = ((occupancy_data / 255.0) * 100).astype('uint8')
@@ -222,8 +239,8 @@ class PathPlan():
 
 
          # Find nearest nodes to start and end in the graph
-        _, start_index = self.kd_tree.query(start_node)
-        _, end_index = self.kd_tree.query(end_node)
+        _, start_index = self.node.kd_tree.query(start_node)
+        _, end_index = self.node.kd_tree.query(end_node)
 
         # Run A* on the graph
         path = self.astar(self.graph, start_index, end_index) # outputs a list of indices for what node the path has
@@ -261,7 +278,7 @@ class PathPlan():
 
         # Step 1: Sample random points in grid space and check validity
         self.valid_points = []
-        # random.seed(42)
+        random.seed(42)
         num_samples = 0
         while num_samples < self.num_samples:
             # Sample a random point
@@ -301,7 +318,9 @@ class PathPlan():
             self.graph.append((point1[0], point1[1], neighbors))
 
         # Build KDTree for nearest neighbor lookup
-        self.kd_tree = KDTree([(point[0], point[1]) for point in self.valid_points])
+        # self.node.get_logger().info(f"{self.valid_points=}")
+        self.node.kd_tree = KDTree([(point[0], point[1]) for point in self.valid_points])
+        
 
     def visualize_prm(self, points):
         ''' 
