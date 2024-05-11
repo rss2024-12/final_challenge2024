@@ -78,20 +78,24 @@ class CityDrive(Node):
         self.marker_pub = self.create_publisher(Marker, '/visualization_marker', 10)
         self.get_logger().info("Created point publisher")
 
+        self.right_offset_publisher = self.create_publisher(PoseArray, '/right_offset_path', 10)
+        self.right_offset = LineTrajectory(self, "right_offset_trajectory")
+        self.merged_trajectory_publisher = self.create_publisher(PoseArray, '/merged_path', 10)
+        self.merged_offset = LineTrajectory(self, "merge_offset_trajectory")
 
 
     def midline_cb(self, msg):
         """
         msg: PoseArray object representing points along a midline piecewise line segment.
         This function is called once when the midline trajectory is loaded.
-        It publishes a new PoseArray object, "offset_path," which represents the midline trajectory offset by the wheelbase length.
+        It publishes new PoseArray objects for both left and right offsets based on the midline trajectory.
         """
         self.get_logger().info(f"Receiving new trajectory with {len(msg.poses)} points")
 
         if len(msg.poses) < 3:  # Requires at least three points to calculate angles
             self.get_logger().error("Received trajectory is too short to compute offset.")
             return
-        
+
         # Interpolate the trajectory
         interpolated_trajectory = self.interpolate_trajectory(msg)
         self.get_logger().info(f"Interpolated trajectory with {len(interpolated_trajectory.poses)} points")
@@ -100,69 +104,120 @@ class CityDrive(Node):
         self.interp_publisher.publish(interpolated_trajectory)
         self.interp.fromPoseArray(interpolated_trajectory)
         self.interp.publish_viz(offset=0.0)
-        self.get_logger().info("Published interp trajectory.")
+        self.get_logger().info("Published interpolated trajectory.")
 
-        offset_points = []
-        side = -1.0  # -1.0 is left, 1.0 is right
+        left_offset_points = []
+        right_offset_points = []
+        side_offsets = {'left': -1.0, 'right': 1.0}  # -1.0 for left, 1.0 for right
 
-        for i in range(1, len(interpolated_trajectory.poses) - 1):
-            p_prev = np.array([interpolated_trajectory.poses[i - 1].position.x, interpolated_trajectory.poses[i - 1].position.y])
-            p_curr = np.array([interpolated_trajectory.poses[i].position.x, interpolated_trajectory.poses[i].position.y])
-            p_next = np.array([interpolated_trajectory.poses[i + 1].position.x, interpolated_trajectory.poses[i + 1].position.y])
+        for direction, side in side_offsets.items():
+            offset_points = []
+            for i in range(1, len(interpolated_trajectory.poses) - 1):
+                p_prev = np.array([interpolated_trajectory.poses[i - 1].position.x, interpolated_trajectory.poses[i - 1].position.y])
+                p_curr = np.array([interpolated_trajectory.poses[i].position.x, interpolated_trajectory.poses[i].position.y])
+                p_next = np.array([interpolated_trajectory.poses[i + 1].position.x, interpolated_trajectory.poses[i + 1].position.y])
 
-            # Calculate and normalize direction vectors
-            v1 = p_curr - p_prev
-            v2 = p_next - p_curr
-            v1 /= np.linalg.norm(v1)
-            v2 /= np.linalg.norm(v2)
+                # Calculate and normalize direction vectors
+                v1 = p_curr - p_prev
+                v2 = p_next - p_curr
+                v1 /= np.linalg.norm(v1)
+                v2 /= np.linalg.norm(v2)
 
-            # Calculate perpendicular vector
-            perpendicular_vector = np.array([-v1[1], v1[0]])
-            regular_offset = p_curr + side * self.wheelbase_length * perpendicular_vector
+                # Calculate perpendicular vector
+                perpendicular_vector = np.array([-v1[1], v1[0]])
+                regular_offset = p_curr + side * self.wheelbase_length * perpendicular_vector
 
-            # Calculate dot product to find the angle between segments
-            dot_product = np.dot(v1, v2)
-            angle_cos = dot_product  # Since vectors are normalized, this gives cos(theta)
+                # Calculate dot product to find the angle between segments
+                dot_product = np.dot(v1, v2)
+                angle_cos = dot_product  # Since vectors are normalized, this gives cos(theta)
 
-            # Check if the angle is close to 90 degrees
-            if np.abs(angle_cos) < 0.3:
-                # Apply additional shift in the direction of the segment
-                additional_shift = v1 * -side * self.wheelbase_length
+                # Check if the angle is close to 90 degrees
+                if np.abs(angle_cos) < 0.3:
+                    # Apply additional shift in the direction of the segment
+                    additional_shift = v1 * -side * self.wheelbase_length
+                else:
+                    additional_shift = np.array([0, 0])
+
+                # Combine the perpendicular and additional shifts
+                offset_point = regular_offset + additional_shift
+                offset_points.append(offset_point)
+
+            # Add the first and last points with only the regular offset
+            first_point = np.array([interpolated_trajectory.poses[0].position.x, interpolated_trajectory.poses[0].position.y])
+            last_point = np.array([interpolated_trajectory.poses[-1].position.x, interpolated_trajectory.poses[-1].position.y])
+            first_direction = np.array([interpolated_trajectory.poses[1].position.x, interpolated_trajectory.poses[1].position.y]) - first_point
+            first_direction /= np.linalg.norm(first_direction)
+            first_perpendicular = np.array([-first_direction[1], first_direction[0]])
+            offset_points.insert(0, first_point + side * self.wheelbase_length * first_perpendicular)
+
+            last_direction = last_point - np.array([interpolated_trajectory.poses[-2].position.x, interpolated_trajectory.poses[-2].position.y])
+            last_direction /= np.linalg.norm(last_direction)
+            last_perpendicular = np.array([-last_direction[1], last_direction[0]])
+            offset_points.append(last_point + side * self.wheelbase_length * last_perpendicular)
+
+            # Creating a new PoseArray for the offset trajectory
+            offset_pose_array = PoseArray()
+            offset_pose_array.header = interpolated_trajectory.header
+            for point in offset_points:
+                pose = Pose()
+                pose.position.x = point[0]
+                pose.position.y = point[1]
+                pose.orientation.w = 1.0  # No rotation applied
+                offset_pose_array.poses.append(pose)
+
+            # Publishing the offset trajectory
+            if direction == 'left':
+                lpa = offset_pose_array
+                self.offset_publisher.publish(offset_pose_array)
+                self.offset.fromPoseArray(offset_pose_array)
+                self.offset.publish_viz(offset=0.0)
+                self.get_logger().info("Published left offset trajectory.")
             else:
-                additional_shift = np.array([0, 0])
+                rpa = offset_pose_array
+                self.right_offset_publisher.publish(offset_pose_array)
+                self.right_offset.fromPoseArray(offset_pose_array)
+                self.right_offset.publish_viz(offset=0.0)
+                self.get_logger().info("Published right offset trajectory.")
+        self.publish_merged_trajectory(self.merge_trajectories(lpa, rpa))
 
-            # Combine the perpendicular and additional shifts
-            offset_point = regular_offset + additional_shift
-            offset_points.append(offset_point)
+    def merge_trajectories(self, left_trajectory, right_trajectory):
+        """
+        Merges the left and right trajectories into a single trajectory. The left trajectory is followed by
+        the reversed right trajectory.
 
-        # Add the first and last points with only the regular offset
-        first_point = np.array([interpolated_trajectory.poses[0].position.x, interpolated_trajectory.poses[0].position.y])
-        last_point = np.array([interpolated_trajectory.poses[-1].position.x, interpolated_trajectory.poses[-1].position.y])
-        first_direction = np.array([interpolated_trajectory.poses[1].position.x, interpolated_trajectory.poses[1].position.y]) - first_point
-        first_direction /= np.linalg.norm(first_direction)
-        first_perpendicular = np.array([-first_direction[1], first_direction[0]])
-        offset_points.insert(0, first_point + side * self.wheelbase_length * first_perpendicular)
+        Args:
+            left_trajectory (PoseArray): The PoseArray containing the left offset trajectory.
+            right_trajectory (PoseArray): The PoseArray containing the right offset trajectory.
 
-        last_direction = last_point - np.array([interpolated_trajectory.poses[-2].position.x, interpolated_trajectory.poses[-2].position.y])
-        last_direction /= np.linalg.norm(last_direction)
-        last_perpendicular = np.array([-last_direction[1], last_direction[0]])
-        offset_points.append(last_point + side * self.wheelbase_length * last_perpendicular)
+        Returns:
+            PoseArray: The merged trajectory.
+        """
+        # Create a new PoseArray for the merged trajectory
+        merged_trajectory = PoseArray()
+        merged_trajectory.header = left_trajectory.header  # Assuming both trajectories have the same header
 
-        # Creating a new PoseArray for the offset trajectory
-        offset_pose_array = PoseArray()
-        offset_pose_array.header = interpolated_trajectory.header
-        for point in offset_points:
-            pose = Pose()
-            pose.position.x = point[0]
-            pose.position.y = point[1]
-            pose.orientation.w = 1.0  # No rotation applied
-            offset_pose_array.poses.append(pose)
+        # Add all poses from the left trajectory
+        merged_trajectory.poses.extend(left_trajectory.poses)
 
-        # Publishing the offset trajectory
-        self.offset_publisher.publish(offset_pose_array)
-        self.offset.fromPoseArray(offset_pose_array)
-        self.offset.publish_viz(offset=0.0)
-        self.get_logger().info("Published offset trajectory.")
+        # Add poses from the right trajectory in reverse order
+        reversed_right_poses = list(reversed(right_trajectory.poses))
+        merged_trajectory.poses.extend(reversed_right_poses)
+
+        return merged_trajectory
+
+    def publish_merged_trajectory(self, merged_trajectory):
+        """
+        Publishes the merged trajectory to a topic.
+
+        Args:
+            merged_trajectory (PoseArray): The merged trajectory PoseArray to be published.
+        """
+        # Assuming you have a publisher set up for merged trajectories
+        self.merged_trajectory_publisher.publish(merged_trajectory)
+        self.merged_offset.fromPoseArray(merged_trajectory)
+        self.merged_offset.publish_viz(offset=0.5)
+        self.get_logger().info("Published merged trajectory.")
+
 
     def interpolate_trajectory(self, pose_array, point_spacing=1.0):
         """
@@ -267,8 +322,7 @@ class CityDrive(Node):
                 ## offsetted trajectory
         if self.offset_points is not None:
             self.get_logger().info("Recieved offset trajectory.")
-            offset_traj = self.offset.toPoseArray() # full offset trajectory
-
+            offset_traj = self.merged_offset.toPoseArray() # full offset trajectory
 
             # for all 3 shells
             # Create a new PoseArray object for the shell path
@@ -280,7 +334,7 @@ class CityDrive(Node):
                 self.get_logger().info(f"Shell {index+1}")
 
                 # obtain points of intersection
-                start_pt,end_pt = self.find_intersection_points(offset_traj, point, 5.)
+                start_pt,end_pt = self.find_intersection_points(offset_traj, point, 4.)
 
                 # # Publish start point marker
                 # start_marker = self.create_marker(start_pt, marker_id=1, color=(0.0, 1.0, 1.0))
@@ -304,7 +358,7 @@ class CityDrive(Node):
 
                 # Find the start index in offset_traj
                 numpy_final_poses = self.pose_array_to_numpy(final_pose_array)
-                self.get_logger().info(f"{numpy_final_poses=}")
+                # self.get_logger().info(f"{numpy_final_poses=}")
                 start_index = np.where(np.all(numpy_final_poses == start_pt, axis=1))[0][0]
                 end_index = np.where(np.all(numpy_final_poses == end_pt, axis=1))[0][0]
 
@@ -353,21 +407,62 @@ class CityDrive(Node):
             points[idx] = [pose.position.x, pose.position.y]
         return points
         
-    def find_intersection_points(self,trajectory_points, circle_center, radius:float):
+
+    def find_intersection_points(self, trajectory_points, circle_center, radius: float):
         """
         Function that will find the intersection points between a circle of size radius
-        around the shell.
+        around the shell and determine the closest segment to the center.
         """
         traj_points_np = self.pose_array_to_numpy(trajectory_points)
-        circle_center_np = np.array([circle_center.position.x,circle_center.position.y])
+        circle_center_np = np.array([circle_center.position.x, circle_center.position.y])
 
-        distances = np.sqrt((traj_points_np[:,0]-circle_center_np[0])**2 + (traj_points_np[:,1]-circle_center_np[1])**2)
-        intersection_mask = distances <= radius
+        # Calculate distances from all trajectory points to the circle center
+        distances = np.sqrt((traj_points_np[:, 0] - circle_center_np[0]) ** 2 +
+                            (traj_points_np[:, 1] - circle_center_np[1]) ** 2)
+        intersection_mask = (distances <= radius) & (distances >= radius - 1.5)
         intersection_pts = traj_points_np[intersection_mask]
-        start_pt = intersection_pts[0]
-        end_pt = intersection_pts[-1]
 
-        return (start_pt,end_pt)
+        # Ensure there are at least two points to form a segment
+        if len(intersection_pts) < 2:
+            self.get_logger().info("Not enough intersection points to form segments.")
+            return None, None
+
+        min_distance = float('inf')
+        start_pt_index = None
+        end_pt_index = None
+
+        # Iterate through each pair of consecutive points
+        for i in range(len(intersection_pts) - 1):
+            point_a = intersection_pts[i]
+            point_b = intersection_pts[i + 1]
+            segment_vector = point_b - point_a
+            vector_to_center = circle_center_np - point_a
+
+            # Project vector_to_center onto segment_vector
+            segment_length_squared = np.dot(segment_vector, segment_vector)
+            if segment_length_squared == 0:
+                continue  # Avoid division by zero if points are coincident
+            projection_length = np.dot(vector_to_center, segment_vector) / segment_length_squared
+            projection_vector = projection_length * segment_vector
+            projection_point = point_a + projection_vector
+
+            # Check if the projection point is within the segment
+            if 0 <= projection_length <= 1:
+                perpendicular_distance = np.linalg.norm(vector_to_center - projection_vector)
+                if perpendicular_distance < min_distance:
+                    min_distance = perpendicular_distance
+                    start_pt_index = i
+                    end_pt_index = i + 1
+
+        # Check if a valid segment was found
+        if start_pt_index is not None and end_pt_index is not None:
+            start_pt = intersection_pts[start_pt_index]
+            end_pt = intersection_pts[end_pt_index]
+            return start_pt, end_pt
+        else:
+            self.get_logger().info("No suitable segment found.")
+            return None, None
+
 
     def numpy_to_PoseStamped(self,array:np.ndarray):
         """
