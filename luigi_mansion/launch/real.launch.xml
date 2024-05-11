@@ -23,6 +23,6 @@
     <node pkg="luigi_mansion" exec="stop_detector" name="stop_detector" output="screen">
     </node>
 
-    <node pkg="luigi_mansion" exec="homography_transformer" name="homography_transformer">
+    <node pkg="luigi_mansion" exec="stoplight_detector" name="stoplight_detector" output="screen">
     </node>
 </launch>
