@@ -33,10 +33,7 @@ class SignDetector(Node):
         self.min_dist = 0.5
         self.max_dist = 1.0
         self.homography_pub = self.create_publisher(LineLocationPixel, "/relative_line_px", 1)
-<<<<<<< HEAD
         self.homography_sub = self.create_subscription(LineLocation, "/relative_line", self.homography_callback, 1)
-=======
->>>>>>> 8482dc003d75ae5ebdcf63bf7ffcda1f2b33960d
 
         self.get_logger().info("Stop Detector Initialized")
 
