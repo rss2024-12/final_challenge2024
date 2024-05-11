@@ -31,8 +31,7 @@ setup(
             'shell_drive = luigi_mansion.shell_drive_node:main',
             'basement_point_pub = luigi_mansion.basement_point_publisher:main',
             'stop_detector = luigi_mansion.stop_detector:main',
-            'homography_transformer = luigi_mansion.homography_transformer:main'
-            # 'trajectory_planner_local = luigi_mansion.trajectory_planner_local:main'
+            'stoplight_detector = luigi_mansion.stoplight_detector:main',
         ],
     },
 )

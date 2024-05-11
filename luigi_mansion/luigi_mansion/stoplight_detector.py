@@ -6,7 +6,7 @@ import cv2
 from cv_bridge import CvBridge, CvBridgeError
 
 from sensor_msgs.msg import Image
-from cs_msgs import LineLocationPixel
+from cs_msgs.msg import LineLocationPixel
 from ackermann_msgs.msg import AckermannDriveStamped
 
 class StopLightDetector(Node):
@@ -16,7 +16,7 @@ class StopLightDetector(Node):
     Publishes to: /relative_line_px (ConeLocationPixel) : the coordinates of the line in the image frame (units are pixels).
     The reason its a ConeLocationPixel is because I did not want to change other code
     
-    Publish drive command to /vesc/high_level/input/nav_1
+    Publish drive command to /vesc/high_level/input/nav_0
     """
     def __init__(self):
         super().__init__("stoplight_detector")
@@ -30,13 +30,11 @@ class StopLightDetector(Node):
         self.bridge = CvBridge() # Converts between ROS images and OpenCV Images
 
         self.get_logger().info("StopLight Detector Initialized")
-        self.debug_image = self.create_publisher(Image, "/debug")
+        self.debug_image = self.create_publisher(Image, "/debug", 1)
 
         ###Need to update for params file
-        self.drive_pub = self.create_publisher(AckermannDriveStamped, "/vesc/high_level/input/nav_1", self.image_callback,10)
-
-
-    
+        self.drive_pub = self.create_publisher(AckermannDriveStamped, "/vesc/high_level/input/nav_0",10)
+  
     def image_callback(self, image_msg):
         # This takes in the image and will extract the line directly to the left of the car
         #this line will be white (HSV filter) and have the most positive slope
@@ -48,8 +46,8 @@ class StopLightDetector(Node):
         hsv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2HSV)
     
         # Define lower and upper bounds for the line color in HSV
-        lower_bound = np.array([0, 150, 200])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
-        upper_bound = np.array([10, 255, 255])
+        lower_bound = np.array([0, 225, 225])  # Lower bound for white in HSV [0,55,106] to [11,255,255]
+        upper_bound = np.array([15, 255, 255])
        
         # Ignore the top half of the image
         height = image_msg.height
@@ -59,7 +57,6 @@ class StopLightDetector(Node):
         top_mask[height*1.25//4:, :] = 255
         top_mask[:height*1.75//4:,:] = 255
         
-
         # Threshold the HSV image to get a binary mask, combine with top half mask
         mask = cv2.inRange(hsv_img, lower_bound, upper_bound)
         mask = cv2.bitwise_and(mask, top_mask)
@@ -81,7 +78,7 @@ class StopLightDetector(Node):
         pixel.u = float(x)
         pixel.v = float(y)
         
-        if box != ((0, 0), (0, 0))
+        if box != ((0, 0), (0, 0)):
             drive_msg = AckermannDriveStamped()
             drive_msg.speed = 0.0
             self.drive_pub.publish(drive_msg)
