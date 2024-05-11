@@ -1,2 +1,3 @@
 .vscode/
 luigi_mansion/luigi_mansion/__pycache__/
+luigi_mansion/luigi_mansion/stop_detector_helpers/

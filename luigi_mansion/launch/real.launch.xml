@@ -11,7 +11,7 @@
     </node>
 
     <node pkg="localization" exec="particle_filter" name="particle_filter">
-        <param from="$(find-pkg-share path_planning)/config/sim/pf_config.yaml"/>
+        <param from="$(find-pkg-share path_planning)/config/real/pf_config.yaml"/>
     </node>
 
     <node pkg="luigi_mansion" exec="city_drive" name="city_drive">
@@ -21,8 +21,5 @@
     </node>  -->
 
     <node pkg="luigi_mansion" exec="stop_detector" name="stop_detector" output="screen">
-    </node>
-
-    <node pkg="luigi_mansion" exec="homography_transformer" name="homography_transformer">
     </node>
 </launch>
